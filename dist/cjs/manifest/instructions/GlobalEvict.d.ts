@@ -6,12 +6,21 @@
  */
 import * as beet from '@metaplex-foundation/beet';
 import * as web3 from '@solana/web3.js';
+import { GlobalEvictParams } from '../types/GlobalEvictParams';
 /**
  * @category Instructions
  * @category GlobalEvict
  * @category generated
  */
-export declare const GlobalEvictStruct: beet.BeetArgsStruct<{
+export type GlobalEvictInstructionArgs = {
+    params: GlobalEvictParams;
+};
+/**
+ * @category Instructions
+ * @category GlobalEvict
+ * @category generated
+ */
+export declare const GlobalEvictStruct: beet.BeetArgsStruct<GlobalEvictInstructionArgs & {
     instructionDiscriminator: number;
 }>;
 /**
@@ -41,8 +50,10 @@ export declare const globalEvictInstructionDiscriminator = 11;
  * Creates a _GlobalEvict_ instruction.
  *
  * @param accounts that will be accessed while the instruction is processed
+ * @param args to provide as instruction data to the program
+ *
  * @category Instructions
  * @category GlobalEvict
  * @category generated
  */
-export declare function createGlobalEvictInstruction(accounts: GlobalEvictInstructionAccounts, programId?: web3.PublicKey): web3.TransactionInstruction;
+export declare function createGlobalEvictInstruction(accounts: GlobalEvictInstructionAccounts, args: GlobalEvictInstructionArgs, programId?: web3.PublicKey): web3.TransactionInstruction;

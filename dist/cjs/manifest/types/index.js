@@ -18,6 +18,7 @@ __exportStar(require("./BatchUpdateParams"), exports);
 __exportStar(require("./BatchUpdateReturn"), exports);
 __exportStar(require("./CancelOrderParams"), exports);
 __exportStar(require("./DepositParams"), exports);
+__exportStar(require("./GlobalCleanParams"), exports);
 __exportStar(require("./GlobalDepositParams"), exports);
 __exportStar(require("./GlobalEvictParams"), exports);
 __exportStar(require("./GlobalWithdrawParams"), exports);

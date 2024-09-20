@@ -105,6 +105,11 @@ export function createPlaceOrderInstruction(accounts, args, programId = new web3
             isSigner: false,
         },
         {
+            pubkey: accounts.baseTokenProgram,
+            isWritable: true,
+            isSigner: false,
+        },
+        {
             pubkey: accounts.quoteMint,
             isWritable: false,
             isSigner: false,
@@ -121,6 +126,11 @@ export function createPlaceOrderInstruction(accounts, args, programId = new web3
         },
         {
             pubkey: accounts.quoteMarketVault,
+            isWritable: true,
+            isSigner: false,
+        },
+        {
+            pubkey: accounts.quoteTokenProgram,
             isWritable: true,
             isSigner: false,
         },

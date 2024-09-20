@@ -74,11 +74,11 @@ export declare class PlaceOrderLog implements PlaceOrderLogArgs {
         isBid: any;
         lastValidSlot: any;
         orderType: any;
+        orderIndex: any;
         market: any;
         trader: any;
         price: any;
         padding: any;
-        orderIndex: any;
     }>;
     /**
      * Deserializes the {@link PlaceOrderLog} from the provided data Buffer.

@@ -385,6 +385,24 @@ export class InvalidEvictError extends Error {
 createErrorFromCodeLookup.set(0x14, () => new InvalidEvictError());
 createErrorFromNameLookup.set('InvalidEvict', () => new InvalidEvictError());
 /**
+ * InvalidClean: 'Tried to clean order that was not eligible to be cleaned'
+ *
+ * @category Errors
+ * @category generated
+ */
+export class InvalidCleanError extends Error {
+    code = 0x15;
+    name = 'InvalidClean';
+    constructor() {
+        super('Tried to clean order that was not eligible to be cleaned');
+        if (typeof Error.captureStackTrace === 'function') {
+            Error.captureStackTrace(this, InvalidCleanError);
+        }
+    }
+}
+createErrorFromCodeLookup.set(0x15, () => new InvalidCleanError());
+createErrorFromNameLookup.set('InvalidClean', () => new InvalidCleanError());
+/**
  * Attempts to resolve a custom program error from the provided error code.
  * @category Errors
  * @category generated

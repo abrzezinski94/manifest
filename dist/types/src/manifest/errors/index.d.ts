@@ -240,6 +240,17 @@ export declare class InvalidEvictError extends Error {
     constructor();
 }
 /**
+ * InvalidClean: 'Tried to clean order that was not eligible to be cleaned'
+ *
+ * @category Errors
+ * @category generated
+ */
+export declare class InvalidCleanError extends Error {
+    readonly code: number;
+    readonly name: string;
+    constructor();
+}
+/**
  * Attempts to resolve a custom program error from the provided error code.
  * @category Errors
  * @category generated

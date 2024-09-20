@@ -29,35 +29,34 @@ var __importStar = (this && this.__importStar) || function (mod) {
     return result;
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.globalEvictInstructionDiscriminator = exports.GlobalEvictStruct = void 0;
-exports.createGlobalEvictInstruction = createGlobalEvictInstruction;
-const splToken = __importStar(require("@solana/spl-token"));
+exports.globalCleanInstructionDiscriminator = exports.GlobalCleanStruct = void 0;
+exports.createGlobalCleanInstruction = createGlobalCleanInstruction;
 const beet = __importStar(require("@metaplex-foundation/beet"));
 const web3 = __importStar(require("@solana/web3.js"));
-const GlobalEvictParams_1 = require("../types/GlobalEvictParams");
+const GlobalCleanParams_1 = require("../types/GlobalCleanParams");
 /**
  * @category Instructions
- * @category GlobalEvict
+ * @category GlobalClean
  * @category generated
  */
-exports.GlobalEvictStruct = new beet.BeetArgsStruct([
+exports.GlobalCleanStruct = new beet.BeetArgsStruct([
     ['instructionDiscriminator', beet.u8],
-    ['params', GlobalEvictParams_1.globalEvictParamsBeet],
-], 'GlobalEvictInstructionArgs');
-exports.globalEvictInstructionDiscriminator = 11;
+    ['params', GlobalCleanParams_1.globalCleanParamsBeet],
+], 'GlobalCleanInstructionArgs');
+exports.globalCleanInstructionDiscriminator = 12;
 /**
- * Creates a _GlobalEvict_ instruction.
+ * Creates a _GlobalClean_ instruction.
  *
  * @param accounts that will be accessed while the instruction is processed
  * @param args to provide as instruction data to the program
  *
  * @category Instructions
- * @category GlobalEvict
+ * @category GlobalClean
  * @category generated
  */
-function createGlobalEvictInstruction(accounts, args, programId = new web3.PublicKey('MNFSTqtC93rEfYHB6hF82sKdZpUDFWkViLByLd1k1Ms')) {
-    const [data] = exports.GlobalEvictStruct.serialize({
-        instructionDiscriminator: exports.globalEvictInstructionDiscriminator,
+function createGlobalCleanInstruction(accounts, args, programId = new web3.PublicKey('MNFSTqtC93rEfYHB6hF82sKdZpUDFWkViLByLd1k1Ms')) {
+    const [data] = exports.GlobalCleanStruct.serialize({
+        instructionDiscriminator: exports.globalCleanInstructionDiscriminator,
         ...args,
     });
     const keys = [
@@ -67,33 +66,18 @@ function createGlobalEvictInstruction(accounts, args, programId = new web3.Publi
             isSigner: true,
         },
         {
+            pubkey: accounts.market,
+            isWritable: true,
+            isSigner: false,
+        },
+        {
+            pubkey: accounts.systemProgram ?? web3.SystemProgram.programId,
+            isWritable: false,
+            isSigner: false,
+        },
+        {
             pubkey: accounts.global,
             isWritable: true,
-            isSigner: false,
-        },
-        {
-            pubkey: accounts.mint,
-            isWritable: false,
-            isSigner: false,
-        },
-        {
-            pubkey: accounts.globalVault,
-            isWritable: true,
-            isSigner: false,
-        },
-        {
-            pubkey: accounts.traderToken,
-            isWritable: false,
-            isSigner: false,
-        },
-        {
-            pubkey: accounts.evicteeToken,
-            isWritable: false,
-            isSigner: false,
-        },
-        {
-            pubkey: accounts.tokenProgram ?? splToken.TOKEN_PROGRAM_ID,
-            isWritable: false,
             isSigner: false,
         },
     ];

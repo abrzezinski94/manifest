@@ -20,6 +20,7 @@ __exportStar(require("./CreateMarket"), exports);
 __exportStar(require("./Deposit"), exports);
 __exportStar(require("./Expand"), exports);
 __exportStar(require("./GlobalAddTrader"), exports);
+__exportStar(require("./GlobalClean"), exports);
 __exportStar(require("./GlobalCreate"), exports);
 __exportStar(require("./GlobalDeposit"), exports);
 __exportStar(require("./GlobalEvict"), exports);

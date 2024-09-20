@@ -1,5 +1,5 @@
 import { bignum } from '@metaplex-foundation/beet';
-import { Connection, PublicKey } from '@solana/web3.js';
+import { AccountInfo, Connection, PublicKey, Signer, TransactionInstruction } from '@solana/web3.js';
 import { OrderType } from './ui_wrapper';
 import { Market } from './market';
 /**
@@ -141,5 +141,23 @@ export declare class UiWrapper {
         amount: number;
         price: number;
         orderId?: number;
-    }): import("@solana/web3.js").TransactionInstruction;
+    }): TransactionInstruction;
+    static fetchFirstUserWrapper(connection: Connection, payer: PublicKey): Promise<Readonly<{
+        account: AccountInfo<Buffer>;
+        pubkey: PublicKey;
+    }> | null>;
+    static placeOrderCreateIfNotExistsIxs(connection: Connection, baseMint: PublicKey, baseDecimals: number, quoteMint: PublicKey, quoteDecimals: number, owner: PublicKey, payer: PublicKey, args: {
+        isBid: boolean;
+        amount: number;
+        price: number;
+        orderId?: number;
+    }): Promise<{
+        ixs: TransactionInstruction[];
+        signers: Signer[];
+    }>;
+    static setupIxs(connection: Connection, market: PublicKey, owner: PublicKey, payer: PublicKey): Promise<{
+        ixs: TransactionInstruction[];
+        signers: Signer[];
+    }>;
+    private static placeIx_;
 }

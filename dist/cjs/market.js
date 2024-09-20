@@ -1,11 +1,15 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.Market = void 0;
+const web3_js_1 = require("@solana/web3.js");
 const beet_1 = require("./utils/beet");
 const beet_solana_1 = require("@metaplex-foundation/beet-solana");
 const redBlackTree_1 = require("./utils/redBlackTree");
 const numbers_1 = require("./utils/numbers");
 const constants_1 = require("./constants");
+const manifest_1 = require("./manifest");
+const market_1 = require("./utils/market");
+const spl_token_1 = require("@solana/spl-token");
 /**
  * Market object used for reading data from a manifest market.
  */
@@ -279,6 +283,52 @@ class Market {
             asks,
             claimedSeats,
         };
+    }
+    static async findByMints(connection, baseMint, quoteMint) {
+        // Based on the MarketFixed struct
+        const baseMintOffset = 16;
+        const quoteMintOffset = 48;
+        const filters = [
+            {
+                memcmp: {
+                    offset: baseMintOffset,
+                    bytes: baseMint.toBase58(),
+                },
+            },
+            {
+                memcmp: {
+                    offset: quoteMintOffset,
+                    bytes: quoteMint.toBase58(),
+                },
+            },
+        ];
+        const accounts = await connection.getProgramAccounts(manifest_1.PROGRAM_ID, {
+            filters,
+        });
+        return accounts.map(({ account, pubkey }) => Market.loadFromBuffer({ address: pubkey, buffer: account.data }));
+    }
+    static async setupIxs(connection, baseMint, quoteMint, payer) {
+        const marketKeypair = web3_js_1.Keypair.generate();
+        const createAccountIx = web3_js_1.SystemProgram.createAccount({
+            fromPubkey: payer,
+            newAccountPubkey: marketKeypair.publicKey,
+            space: constants_1.FIXED_MANIFEST_HEADER_SIZE,
+            lamports: await connection.getMinimumBalanceForRentExemption(constants_1.FIXED_MANIFEST_HEADER_SIZE),
+            programId: manifest_1.PROGRAM_ID,
+        });
+        const market = marketKeypair.publicKey;
+        const baseVault = (0, market_1.getVaultAddress)(market, baseMint);
+        const quoteVault = (0, market_1.getVaultAddress)(market, quoteMint);
+        const createMarketIx = (0, manifest_1.createCreateMarketInstruction)({
+            payer,
+            baseMint,
+            quoteMint,
+            market,
+            baseVault,
+            quoteVault,
+            tokenProgram22: spl_token_1.TOKEN_2022_PROGRAM_ID,
+        });
+        return { ixs: [createAccountIx, createMarketIx], signers: [marketKeypair] };
     }
 }
 exports.Market = Market;

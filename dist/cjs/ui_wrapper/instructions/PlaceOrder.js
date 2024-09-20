@@ -132,6 +132,11 @@ function createPlaceOrderInstruction(accounts, args, programId = new web3.Public
             isSigner: false,
         },
         {
+            pubkey: accounts.baseTokenProgram,
+            isWritable: true,
+            isSigner: false,
+        },
+        {
             pubkey: accounts.quoteMint,
             isWritable: false,
             isSigner: false,
@@ -148,6 +153,11 @@ function createPlaceOrderInstruction(accounts, args, programId = new web3.Public
         },
         {
             pubkey: accounts.quoteMarketVault,
+            isWritable: true,
+            isSigner: false,
+        },
+        {
+            pubkey: accounts.quoteTokenProgram,
             isWritable: true,
             isSigner: false,
         },

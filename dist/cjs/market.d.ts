@@ -1,4 +1,4 @@
-import { PublicKey, Connection } from '@solana/web3.js';
+import { PublicKey, Connection, TransactionInstruction, Signer } from '@solana/web3.js';
 import { bignum } from '@metaplex-foundation/beet';
 /**
  * Internal use only. Needed because shank doesnt handle f64 and because the
@@ -178,4 +178,9 @@ export declare class Market {
      * @param data The data buffer to deserialize
      */
     static deserializeMarketBuffer(data: Buffer): MarketData;
+    static findByMints(connection: Connection, baseMint: PublicKey, quoteMint: PublicKey): Promise<Market[]>;
+    static setupIxs(connection: Connection, baseMint: PublicKey, quoteMint: PublicKey, payer: PublicKey): Promise<{
+        ixs: TransactionInstruction[];
+        signers: Signer[];
+    }>;
 }

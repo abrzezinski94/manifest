@@ -6,7 +6,7 @@
  * See: https://github.com/metaplex-foundation/solita
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.InvalidEvictError = exports.TooManyGlobalSeatsError = exports.InvalidMintError = exports.IncorrectAccountError = exports.GlobalInsufficientError = exports.MissingGlobalError = exports.OverflowError = exports.OrderTooSmallError = exports.OrderWouldOverflowError = exports.PriceNotPositiveError = exports.WrongIndexHintParamsError = exports.InvalidPlaceOrderFromWalletParamsError = exports.InsufficientOutError = exports.AlreadyExpiredError = exports.PostOnlyCrossesError = exports.AlreadyClaimedSeatError = exports.InvalidFreeListError = exports.InvalidCancelError = exports.InvalidWithdrawAccountsError = exports.InvalidDepositAccountsError = exports.InvalidMarketParametersError = void 0;
+exports.InvalidCleanError = exports.InvalidEvictError = exports.TooManyGlobalSeatsError = exports.InvalidMintError = exports.IncorrectAccountError = exports.GlobalInsufficientError = exports.MissingGlobalError = exports.OverflowError = exports.OrderTooSmallError = exports.OrderWouldOverflowError = exports.PriceNotPositiveError = exports.WrongIndexHintParamsError = exports.InvalidPlaceOrderFromWalletParamsError = exports.InsufficientOutError = exports.AlreadyExpiredError = exports.PostOnlyCrossesError = exports.AlreadyClaimedSeatError = exports.InvalidFreeListError = exports.InvalidCancelError = exports.InvalidWithdrawAccountsError = exports.InvalidDepositAccountsError = exports.InvalidMarketParametersError = void 0;
 exports.errorFromCode = errorFromCode;
 exports.errorFromName = errorFromName;
 const createErrorFromCodeLookup = new Map();
@@ -410,6 +410,25 @@ class InvalidEvictError extends Error {
 exports.InvalidEvictError = InvalidEvictError;
 createErrorFromCodeLookup.set(0x14, () => new InvalidEvictError());
 createErrorFromNameLookup.set('InvalidEvict', () => new InvalidEvictError());
+/**
+ * InvalidClean: 'Tried to clean order that was not eligible to be cleaned'
+ *
+ * @category Errors
+ * @category generated
+ */
+class InvalidCleanError extends Error {
+    code = 0x15;
+    name = 'InvalidClean';
+    constructor() {
+        super('Tried to clean order that was not eligible to be cleaned');
+        if (typeof Error.captureStackTrace === 'function') {
+            Error.captureStackTrace(this, InvalidCleanError);
+        }
+    }
+}
+exports.InvalidCleanError = InvalidCleanError;
+createErrorFromCodeLookup.set(0x15, () => new InvalidCleanError());
+createErrorFromNameLookup.set('InvalidClean', () => new InvalidCleanError());
 /**
  * Attempts to resolve a custom program error from the provided error code.
  * @category Errors

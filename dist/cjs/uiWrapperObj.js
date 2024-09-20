@@ -2,12 +2,14 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.UiWrapper = void 0;
 const beet_solana_1 = require("@metaplex-foundation/beet-solana");
+const web3_js_1 = require("@solana/web3.js");
 const ui_wrapper_1 = require("./ui_wrapper");
 const beet_1 = require("./utils/beet");
 const redBlackTree_1 = require("./utils/redBlackTree");
 const constants_1 = require("./constants");
 const manifest_1 = require("./manifest");
-const market_1 = require("./utils/market");
+const market_1 = require("./market");
+const market_2 = require("./utils/market");
 const spl_token_1 = require("@solana/spl-token");
 const numbers_1 = require("./utils/numbers");
 const bn_js_1 = require("bn.js");
@@ -168,7 +170,7 @@ class UiWrapper {
         const { isBid } = args;
         const mint = isBid ? market.quoteMint() : market.baseMint();
         const traderTokenAccount = (0, spl_token_1.getAssociatedTokenAddressSync)(mint, owner);
-        const vault = (0, market_1.getVaultAddress)(market.address, mint);
+        const vault = (0, market_2.getVaultAddress)(market.address, mint);
         const clientOrderId = args.orderId ?? Date.now();
         const baseAtoms = Math.round(args.amount * 10 ** market.baseDecimals());
         let priceMantissa = args.price;
@@ -200,11 +202,13 @@ class UiWrapper {
             baseMint: market.baseMint(),
             baseGlobal,
             baseGlobalVault,
-            baseMarketVault: (0, market_1.getVaultAddress)(market.address, market.baseMint()),
+            baseMarketVault: (0, market_2.getVaultAddress)(market.address, market.baseMint()),
+            baseTokenProgram: spl_token_1.TOKEN_PROGRAM_ID,
             quoteMint: market.quoteMint(),
             quoteGlobal,
             quoteGlobalVault,
-            quoteMarketVault: (0, market_1.getVaultAddress)(market.address, market.quoteMint()),
+            quoteMarketVault: (0, market_2.getVaultAddress)(market.address, market.quoteMint()),
+            quoteTokenProgram: spl_token_1.TOKEN_PROGRAM_ID,
         }, {
             params: {
                 clientOrderId,
@@ -216,6 +220,149 @@ class UiWrapper {
                 orderType: ui_wrapper_1.OrderType.Limit,
             },
         });
+    }
+    static async fetchFirstUserWrapper(connection, payer) {
+        const existingWrappers = await connection.getProgramAccounts(ui_wrapper_1.PROGRAM_ID, {
+            filters: [
+                // Dont check discriminant since there is only one type of account.
+                {
+                    memcmp: {
+                        offset: 8,
+                        encoding: 'base58',
+                        bytes: payer.toBase58(),
+                    },
+                },
+            ],
+        });
+        return existingWrappers.length > 0 ? existingWrappers[0] : null;
+    }
+    static async placeOrderCreateIfNotExistsIxs(connection, baseMint, baseDecimals, quoteMint, quoteDecimals, owner, payer, args) {
+        const markets = await market_1.Market.findByMints(connection, baseMint, quoteMint);
+        const market = markets.length > 0 ? markets[0] : null;
+        if (market != null) {
+            const wrapper = await UiWrapper.fetchFirstUserWrapper(connection, owner);
+            if (wrapper) {
+                const placeIx = UiWrapper.loadFromBuffer({
+                    address: wrapper.pubkey,
+                    buffer: wrapper.account.data,
+                }).placeOrderIx(market, { payer }, args);
+                return { ixs: [placeIx], signers: [] };
+            }
+            else {
+                const setup = await this.setupIxs(connection, market.address, owner, payer);
+                const wrapper = setup.signers[0].publicKey;
+                const place = await this.placeIx_(market, wrapper, owner, payer, args);
+                return {
+                    ixs: [...setup.ixs, ...place.ixs],
+                    signers: [...setup.signers, ...place.signers],
+                };
+            }
+        }
+        else {
+            const marketIxs = await market_1.Market.setupIxs(connection, baseMint, quoteMint, payer);
+            const market = {
+                address: marketIxs.signers[0].publicKey,
+                baseMint: () => baseMint,
+                quoteMint: () => quoteMint,
+                baseDecimals: () => baseDecimals,
+                quoteDecimals: () => quoteDecimals,
+            };
+            const wrapperIxs = await this.setupIxs(connection, market.address, owner, payer);
+            const wrapper = wrapperIxs.signers[0].publicKey;
+            const placeIx = await this.placeIx_(market, wrapper, owner, payer, args);
+            return {
+                ixs: [...marketIxs.ixs, ...wrapperIxs.ixs, ...placeIx.ixs],
+                signers: [
+                    ...marketIxs.signers,
+                    ...wrapperIxs.signers,
+                    ...placeIx.signers,
+                ],
+            };
+        }
+    }
+    static async setupIxs(connection, market, owner, payer) {
+        const wrapperKeypair = web3_js_1.Keypair.generate();
+        const createAccountIx = web3_js_1.SystemProgram.createAccount({
+            fromPubkey: payer,
+            newAccountPubkey: wrapperKeypair.publicKey,
+            space: constants_1.FIXED_WRAPPER_HEADER_SIZE,
+            lamports: await connection.getMinimumBalanceForRentExemption(constants_1.FIXED_WRAPPER_HEADER_SIZE),
+            programId: ui_wrapper_1.PROGRAM_ID,
+        });
+        const createWrapperIx = (0, ui_wrapper_1.createCreateWrapperInstruction)({
+            payer,
+            owner,
+            wrapperState: wrapperKeypair.publicKey,
+        });
+        const claimSeatIx = (0, ui_wrapper_1.createClaimSeatInstruction)({
+            manifestProgram: manifest_1.PROGRAM_ID,
+            payer,
+            owner,
+            market,
+            wrapperState: wrapperKeypair.publicKey,
+        });
+        return {
+            ixs: [createAccountIx, createWrapperIx, claimSeatIx],
+            signers: [wrapperKeypair],
+        };
+    }
+    static placeIx_(market, wrapper, owner, payer, args) {
+        const { isBid } = args;
+        const mint = isBid ? market.quoteMint() : market.baseMint();
+        const traderTokenAccount = (0, spl_token_1.getAssociatedTokenAddressSync)(mint, owner);
+        const vault = (0, market_2.getVaultAddress)(market.address, mint);
+        const clientOrderId = args.orderId ?? Date.now();
+        const baseAtoms = Math.round(args.amount * 10 ** market.baseDecimals());
+        let priceMantissa = args.price;
+        let priceExponent = market.quoteDecimals() - market.baseDecimals();
+        while (priceMantissa < constants_1.U32_MAX / 10 &&
+            priceExponent > constants_1.PRICE_MIN_EXP &&
+            Math.round(priceMantissa) != priceMantissa) {
+            priceMantissa *= 10;
+            priceExponent -= 1;
+        }
+        while (priceMantissa > constants_1.U32_MAX && priceExponent < constants_1.PRICE_MAX_EXP) {
+            priceMantissa = priceMantissa / 10;
+            priceExponent += 1;
+        }
+        priceMantissa = Math.round(priceMantissa);
+        const baseMarketVault = (0, market_2.getVaultAddress)(market.address, market.baseMint());
+        const quoteMarketVault = (0, market_2.getVaultAddress)(market.address, market.quoteMint());
+        const baseGlobal = (0, global_1.getGlobalAddress)(market.baseMint());
+        const quoteGlobal = (0, global_1.getGlobalAddress)(market.quoteMint());
+        const baseGlobalVault = (0, global_1.getGlobalVaultAddress)(market.baseMint());
+        const quoteGlobalVault = (0, global_1.getGlobalVaultAddress)(market.quoteMint());
+        const placeIx = (0, ui_wrapper_1.createPlaceOrderInstruction)({
+            wrapperState: wrapper,
+            owner,
+            traderTokenAccount,
+            market: market.address,
+            vault,
+            mint,
+            manifestProgram: manifest_1.PROGRAM_ID,
+            payer,
+            baseMint: market.baseMint(),
+            baseGlobal,
+            baseGlobalVault,
+            baseMarketVault,
+            baseTokenProgram: spl_token_1.TOKEN_PROGRAM_ID,
+            quoteMint: market.quoteMint(),
+            quoteGlobal,
+            quoteGlobalVault,
+            quoteMarketVault,
+            quoteTokenProgram: spl_token_1.TOKEN_PROGRAM_ID,
+        }, {
+            params: {
+                clientOrderId,
+                baseAtoms,
+                priceMantissa,
+                priceExponent,
+                isBid,
+                lastValidSlot: constants_1.NO_EXPIRATION_LAST_VALID_SLOT,
+                orderType: ui_wrapper_1.OrderType.Limit,
+            },
+        });
+        return { ixs: [placeIx], signers: [] };
     }
 }
 exports.UiWrapper = UiWrapper;

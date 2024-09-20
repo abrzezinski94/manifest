@@ -7,24 +7,31 @@
 import * as splToken from '@solana/spl-token';
 import * as beet from '@metaplex-foundation/beet';
 import * as web3 from '@solana/web3.js';
+import { globalEvictParamsBeet, } from '../types/GlobalEvictParams';
 /**
  * @category Instructions
  * @category GlobalEvict
  * @category generated
  */
-export const GlobalEvictStruct = new beet.BeetArgsStruct([['instructionDiscriminator', beet.u8]], 'GlobalEvictInstructionArgs');
+export const GlobalEvictStruct = new beet.BeetArgsStruct([
+    ['instructionDiscriminator', beet.u8],
+    ['params', globalEvictParamsBeet],
+], 'GlobalEvictInstructionArgs');
 export const globalEvictInstructionDiscriminator = 11;
 /**
  * Creates a _GlobalEvict_ instruction.
  *
  * @param accounts that will be accessed while the instruction is processed
+ * @param args to provide as instruction data to the program
+ *
  * @category Instructions
  * @category GlobalEvict
  * @category generated
  */
-export function createGlobalEvictInstruction(accounts, programId = new web3.PublicKey('MNFSTqtC93rEfYHB6hF82sKdZpUDFWkViLByLd1k1Ms')) {
+export function createGlobalEvictInstruction(accounts, args, programId = new web3.PublicKey('MNFSTqtC93rEfYHB6hF82sKdZpUDFWkViLByLd1k1Ms')) {
     const [data] = GlobalEvictStruct.serialize({
         instructionDiscriminator: globalEvictInstructionDiscriminator,
+        ...args,
     });
     const keys = [
         {

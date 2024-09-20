@@ -1,124 +1,11 @@
-import { Connection, Keypair, SystemProgram, Transaction, sendAndConfirmTransaction, } from '@solana/web3.js';
+import { Connection, Keypair, Transaction, sendAndConfirmTransaction, } from '@solana/web3.js';
 import { Market } from '../src/market';
 import { createMarket } from './createMarket';
 import { assert } from 'chai';
-import { FIXED_WRAPPER_HEADER_SIZE, NO_EXPIRATION_LAST_VALID_SLOT, PRICE_MAX_EXP, PRICE_MIN_EXP, U32_MAX, } from '../src/constants';
-import { PROGRAM_ID as MANIFEST_PROGRAM_ID, createGlobalCreateInstruction, } from '../src/manifest';
-import { PROGRAM_ID, createCreateWrapperInstruction, createClaimSeatInstruction, createPlaceOrderInstruction, OrderType, } from '../src/ui_wrapper';
+import { createGlobalCreateInstruction } from '../src/manifest';
 import { UiWrapper } from '../src/uiWrapperObj';
 import { TOKEN_PROGRAM_ID, createAssociatedTokenAccountIdempotentInstruction, createMintToInstruction, getAssociatedTokenAddressSync, } from '@solana/spl-token';
-import { getVaultAddress } from '../src/utils/market';
 import { getGlobalAddress, getGlobalVaultAddress } from '../src/utils/global';
-async function fetchFirstUserWrapper(connection, payerPub) {
-    const existingWrappers = await connection.getProgramAccounts(PROGRAM_ID, {
-        filters: [
-            // Dont check discriminant since there is only one type of account.
-            {
-                memcmp: {
-                    offset: 8,
-                    encoding: 'base58',
-                    bytes: payerPub.toBase58(),
-                },
-            },
-        ],
-    });
-    return existingWrappers.length > 0 ? existingWrappers[0] : null;
-}
-async function setupWrapper(connection, market, payer, owner) {
-    owner ??= payer;
-    const wrapperKeypair = Keypair.generate();
-    const createAccountIx = SystemProgram.createAccount({
-        fromPubkey: payer,
-        newAccountPubkey: wrapperKeypair.publicKey,
-        space: FIXED_WRAPPER_HEADER_SIZE,
-        lamports: await connection.getMinimumBalanceForRentExemption(FIXED_WRAPPER_HEADER_SIZE),
-        programId: PROGRAM_ID,
-    });
-    const createWrapperIx = createCreateWrapperInstruction({
-        payer,
-        owner,
-        wrapperState: wrapperKeypair.publicKey,
-    });
-    const claimSeatIx = createClaimSeatInstruction({
-        manifestProgram: MANIFEST_PROGRAM_ID,
-        payer,
-        owner,
-        market,
-        wrapperState: wrapperKeypair.publicKey,
-    });
-    return {
-        ixs: [createAccountIx, createWrapperIx, claimSeatIx],
-        signers: [wrapperKeypair],
-    };
-}
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-async function placeOrderCreateWrapperIfNotExists(connection, market, owner, args) {
-    const wrapper = await fetchFirstUserWrapper(connection, owner);
-    if (wrapper) {
-        const placeIx = UiWrapper.loadFromBuffer({
-            address: wrapper.pubkey,
-            buffer: wrapper.account.data,
-        }).placeOrderIx(market, {}, args);
-        return { ixs: [placeIx], signers: [] };
-    }
-    else {
-        const result = await setupWrapper(connection, market.address, owner);
-        const payer = owner;
-        const { isBid } = args;
-        const mint = isBid ? market.quoteMint() : market.baseMint();
-        const traderTokenAccount = getAssociatedTokenAddressSync(mint, owner);
-        const vault = getVaultAddress(market.address, mint);
-        const clientOrderId = args.orderId ?? Date.now();
-        const baseAtoms = Math.round(args.amount * 10 ** market.baseDecimals());
-        let priceMantissa = args.price;
-        let priceExponent = market.quoteDecimals() - market.baseDecimals();
-        while (priceMantissa < U32_MAX / 10 &&
-            priceExponent > PRICE_MIN_EXP &&
-            Math.round(priceMantissa) != priceMantissa) {
-            priceMantissa *= 10;
-            priceExponent -= 1;
-        }
-        while (priceMantissa > U32_MAX && priceExponent < PRICE_MAX_EXP) {
-            priceMantissa = priceMantissa / 10;
-            priceExponent += 1;
-        }
-        priceMantissa = Math.round(priceMantissa);
-        const baseGlobal = getGlobalAddress(market.baseMint());
-        const quoteGlobal = getGlobalAddress(market.quoteMint());
-        const baseGlobalVault = getGlobalVaultAddress(market.baseMint());
-        const quoteGlobalVault = getGlobalVaultAddress(market.quoteMint());
-        const placeIx = createPlaceOrderInstruction({
-            wrapperState: result.signers[0].publicKey,
-            owner,
-            traderTokenAccount,
-            market: market.address,
-            vault,
-            mint,
-            manifestProgram: MANIFEST_PROGRAM_ID,
-            payer,
-            baseMint: market.baseMint(),
-            baseGlobal,
-            baseGlobalVault,
-            baseMarketVault: getVaultAddress(market.address, market.baseMint()),
-            quoteMint: market.quoteMint(),
-            quoteGlobal,
-            quoteGlobalVault,
-            quoteMarketVault: getVaultAddress(market.address, market.quoteMint()),
-        }, {
-            params: {
-                clientOrderId,
-                baseAtoms,
-                priceMantissa,
-                priceExponent,
-                isBid,
-                lastValidSlot: NO_EXPIRATION_LAST_VALID_SLOT,
-                orderType: OrderType.Limit,
-            },
-        });
-        result.ixs.push(placeIx);
-        return result;
-    }
-}
 async function testWrapper() {
     const startTs = Date.now();
     const connection = new Connection('http://127.0.0.1:8899', 'confirmed');
@@ -129,9 +16,10 @@ async function testWrapper() {
         address: marketAddress,
     });
     market.prettyPrint();
-    assert(null == (await fetchFirstUserWrapper(connection, payerKeypair.publicKey)), 'doesnt find a wrapper yet');
+    assert(null ==
+        (await UiWrapper.fetchFirstUserWrapper(connection, payerKeypair.publicKey)), 'doesnt find a wrapper yet');
     {
-        const setup = await setupWrapper(connection, marketAddress, payerKeypair.publicKey, payerKeypair.publicKey);
+        const setup = await UiWrapper.setupIxs(connection, marketAddress, payerKeypair.publicKey, payerKeypair.publicKey);
         const tx = new Transaction();
         tx.add(...setup.ixs);
         const signature = await sendAndConfirmTransaction(connection, tx, [
@@ -140,7 +28,7 @@ async function testWrapper() {
         ]);
         console.log(`created ui-wrapper at ${setup.signers[0].publicKey} in ${signature}`);
     }
-    const wrapperAcc = await fetchFirstUserWrapper(connection, payerKeypair.publicKey);
+    const wrapperAcc = await UiWrapper.fetchFirstUserWrapper(connection, payerKeypair.publicKey);
     assert(wrapperAcc != null, 'should find wrapper');
     const wrapper = UiWrapper.loadFromBuffer({
         address: wrapperAcc.pubkey,
