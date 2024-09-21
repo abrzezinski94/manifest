@@ -1,6 +1,6 @@
 import { publicKey as beetPublicKey } from '@metaplex-foundation/beet-solana';
 import { Keypair, SystemProgram, } from '@solana/web3.js';
-import { createClaimSeatInstruction, createCreateWrapperInstruction, createPlaceOrderInstruction, OrderType, PROGRAM_ID, } from './ui_wrapper';
+import { createClaimSeatInstruction, createCreateWrapperInstruction, createPlaceOrderInstruction, createSettleFundsInstruction, OrderType, PROGRAM_ID, } from './ui_wrapper';
 import { marketInfoBeet, openOrderBeet } from './utils/beet';
 import { deserializeRedBlackTree } from './utils/redBlackTree';
 import { FIXED_WRAPPER_HEADER_SIZE, NIL, NO_EXPIRATION_LAST_VALID_SLOT, PRICE_MAX_EXP, PRICE_MIN_EXP, U32_MAX, } from './constants';
@@ -62,7 +62,7 @@ export class UiWrapper {
      */
     marketInfoForMarket(marketPk) {
         const filtered = this.data.marketInfos.filter((marketInfo) => {
-            return marketInfo.market.toBase58() == marketPk.toBase58();
+            return marketInfo.market.equals(marketPk);
         });
         if (filtered.length == 0) {
             return null;
@@ -78,7 +78,7 @@ export class UiWrapper {
      */
     openOrdersForMarket(marketPk) {
         const filtered = this.data.marketInfos.filter((marketInfo) => {
-            return marketInfo.market.toBase58() == marketPk.toBase58();
+            return marketInfo.market.equals(marketPk);
         });
         if (filtered.length == 0) {
             return null;
@@ -87,6 +87,39 @@ export class UiWrapper {
     }
     activeMarkets() {
         return this.data.marketInfos.map((mi) => mi.market);
+    }
+    unsettledBalances(markets) {
+        const { owner } = this.data;
+        return markets.map((market) => {
+            const numBaseTokens = market.getWithdrawableBalanceTokens(owner, true);
+            const numQuoteTokens = market.getWithdrawableBalanceTokens(owner, false);
+            return { market, numBaseTokens, numQuoteTokens };
+        });
+    }
+    settleIx(market, platformTokenAccount, referrerTokenAccount, params) {
+        const { owner } = this.data;
+        const mintBase = market.baseMint();
+        const mintQuote = market.quoteMint();
+        const traderTokenAccountBase = getAssociatedTokenAddressSync(mintBase, owner);
+        const traderTokenAccountQuote = getAssociatedTokenAddressSync(mintQuote, owner);
+        const vaultBase = getVaultAddress(market.address, mintBase);
+        const vaultQuote = getVaultAddress(market.address, mintQuote);
+        return createSettleFundsInstruction({
+            wrapperState: this.address,
+            owner,
+            traderTokenAccountBase,
+            traderTokenAccountQuote,
+            market: market.address,
+            vaultBase,
+            vaultQuote,
+            mintBase,
+            mintQuote,
+            tokenProgramBase: TOKEN_PROGRAM_ID,
+            tokenProgramQuote: TOKEN_PROGRAM_ID,
+            manifestProgram: MANIFEST_PROGRAM_ID,
+            platformTokenAccount,
+            referrerTokenAccount,
+        }, params);
     }
     // Do not include getters for the balances because those can be retrieved from
     // the market and that will be fresher data or the same always.

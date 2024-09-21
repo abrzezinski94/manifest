@@ -1,6 +1,6 @@
 import { bignum } from '@metaplex-foundation/beet';
 import { AccountInfo, Connection, PublicKey, Signer, TransactionInstruction } from '@solana/web3.js';
-import { OrderType } from './ui_wrapper';
+import { OrderType, SettleFundsInstructionArgs } from './ui_wrapper';
 import { Market } from './market';
 /**
  * All data stored on a wrapper account.
@@ -119,6 +119,12 @@ export declare class UiWrapper {
      */
     openOrdersForMarket(marketPk: PublicKey): OpenOrder[] | null;
     activeMarkets(): PublicKey[];
+    unsettledBalances(markets: Market[]): {
+        market: Market;
+        numBaseTokens: number;
+        numQuoteTokens: number;
+    }[];
+    settleIx(market: Market, platformTokenAccount: PublicKey, referrerTokenAccount: PublicKey, params: SettleFundsInstructionArgs): TransactionInstruction;
     /**
      * Print all information loaded about the wrapper in a human readable format.
      */

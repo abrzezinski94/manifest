@@ -65,7 +65,7 @@ class UiWrapper {
      */
     marketInfoForMarket(marketPk) {
         const filtered = this.data.marketInfos.filter((marketInfo) => {
-            return marketInfo.market.toBase58() == marketPk.toBase58();
+            return marketInfo.market.equals(marketPk);
         });
         if (filtered.length == 0) {
             return null;
@@ -81,7 +81,7 @@ class UiWrapper {
      */
     openOrdersForMarket(marketPk) {
         const filtered = this.data.marketInfos.filter((marketInfo) => {
-            return marketInfo.market.toBase58() == marketPk.toBase58();
+            return marketInfo.market.equals(marketPk);
         });
         if (filtered.length == 0) {
             return null;
@@ -90,6 +90,39 @@ class UiWrapper {
     }
     activeMarkets() {
         return this.data.marketInfos.map((mi) => mi.market);
+    }
+    unsettledBalances(markets) {
+        const { owner } = this.data;
+        return markets.map((market) => {
+            const numBaseTokens = market.getWithdrawableBalanceTokens(owner, true);
+            const numQuoteTokens = market.getWithdrawableBalanceTokens(owner, false);
+            return { market, numBaseTokens, numQuoteTokens };
+        });
+    }
+    settleIx(market, platformTokenAccount, referrerTokenAccount, params) {
+        const { owner } = this.data;
+        const mintBase = market.baseMint();
+        const mintQuote = market.quoteMint();
+        const traderTokenAccountBase = (0, spl_token_1.getAssociatedTokenAddressSync)(mintBase, owner);
+        const traderTokenAccountQuote = (0, spl_token_1.getAssociatedTokenAddressSync)(mintQuote, owner);
+        const vaultBase = (0, market_2.getVaultAddress)(market.address, mintBase);
+        const vaultQuote = (0, market_2.getVaultAddress)(market.address, mintQuote);
+        return (0, ui_wrapper_1.createSettleFundsInstruction)({
+            wrapperState: this.address,
+            owner,
+            traderTokenAccountBase,
+            traderTokenAccountQuote,
+            market: market.address,
+            vaultBase,
+            vaultQuote,
+            mintBase,
+            mintQuote,
+            tokenProgramBase: spl_token_1.TOKEN_PROGRAM_ID,
+            tokenProgramQuote: spl_token_1.TOKEN_PROGRAM_ID,
+            manifestProgram: manifest_1.PROGRAM_ID,
+            platformTokenAccount,
+            referrerTokenAccount,
+        }, params);
     }
     // Do not include getters for the balances because those can be retrieved from
     // the market and that will be fresher data or the same always.

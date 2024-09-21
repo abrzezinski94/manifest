@@ -78,7 +78,7 @@ class Market {
      */
     getWithdrawableBalanceTokens(trader, isBase) {
         const filteredSeats = this.data.claimedSeats.filter((claimedSeat) => {
-            return claimedSeat.publicKey.toBase58() == trader.toBase58();
+            return claimedSeat.publicKey.equals(trader);
         });
         // No seat claimed.
         if (filteredSeats.length == 0) {
@@ -131,7 +131,7 @@ class Market {
      */
     hasSeat(trader) {
         const filteredSeats = this.data.claimedSeats.filter((claimedSeat) => {
-            return claimedSeat.publicKey.toBase58() == trader.toBase58();
+            return claimedSeat.publicKey.equals(trader);
         });
         return filteredSeats.length > 0;
     }
