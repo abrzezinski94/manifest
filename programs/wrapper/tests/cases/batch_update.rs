@@ -2,10 +2,9 @@ use std::{mem::size_of, rc::Rc};
 
 use hypertree::{get_helper, DataIndex, HyperTreeReadOperations, RBNode, NIL};
 use manifest::state::{constants::NO_EXPIRATION_LAST_VALID_SLOT, OrderType};
+use solana_program::instruction::Instruction;
 use solana_program_test::tokio;
-use solana_sdk::{
-    account::Account, instruction::Instruction, pubkey::Pubkey, signature::Keypair, signer::Signer,
-};
+use solana_sdk::{account::Account, pubkey::Pubkey, signature::Keypair, signer::Signer};
 use wrapper::{
     instruction_builders::{batch_update_instruction, create_wrapper_instructions},
     market_info::MarketInfo,
@@ -42,9 +41,7 @@ async fn wrapper_batch_update_test() -> anyhow::Result<()> {
             false,
             NO_EXPIRATION_LAST_VALID_SLOT,
             OrderType::Limit,
-            0,
         )],
-        None,
     );
     send_tx_with_retry(
         Rc::clone(&test_fixture.context),
@@ -69,9 +66,7 @@ async fn wrapper_batch_update_test() -> anyhow::Result<()> {
             false,
             NO_EXPIRATION_LAST_VALID_SLOT,
             OrderType::Limit,
-            0,
         )],
-        None,
     );
     send_tx_with_retry(
         Rc::clone(&test_fixture.context),
@@ -109,7 +104,6 @@ async fn wrapper_batch_update_reuse_client_order_id_test() -> anyhow::Result<()>
                 true,
                 NO_EXPIRATION_LAST_VALID_SLOT,
                 OrderType::Limit,
-                0,
             ),
             WrapperPlaceOrderParams::new(
                 0,
@@ -119,7 +113,6 @@ async fn wrapper_batch_update_reuse_client_order_id_test() -> anyhow::Result<()>
                 true,
                 NO_EXPIRATION_LAST_VALID_SLOT,
                 OrderType::Limit,
-                0,
             ),
             WrapperPlaceOrderParams::new(
                 0,
@@ -129,7 +122,6 @@ async fn wrapper_batch_update_reuse_client_order_id_test() -> anyhow::Result<()>
                 false,
                 NO_EXPIRATION_LAST_VALID_SLOT,
                 OrderType::Limit,
-                0,
             ),
             WrapperPlaceOrderParams::new(
                 0,
@@ -139,10 +131,8 @@ async fn wrapper_batch_update_reuse_client_order_id_test() -> anyhow::Result<()>
                 false,
                 NO_EXPIRATION_LAST_VALID_SLOT,
                 OrderType::Limit,
-                0,
             ),
         ],
-        None,
     );
     send_tx_with_retry(
         Rc::clone(&test_fixture.context),
@@ -160,7 +150,6 @@ async fn wrapper_batch_update_reuse_client_order_id_test() -> anyhow::Result<()>
         vec![WrapperCancelOrderParams::new(0)],
         false,
         vec![],
-        None,
     );
     send_tx_with_retry(
         Rc::clone(&test_fixture.context),
@@ -254,9 +243,7 @@ async fn sync_remove_test() -> anyhow::Result<()> {
             false,
             NO_EXPIRATION_LAST_VALID_SLOT,
             OrderType::Limit,
-            0,
         )],
-        None,
     );
     send_tx_with_retry(
         Rc::clone(&test_fixture.context),
@@ -280,9 +267,7 @@ async fn sync_remove_test() -> anyhow::Result<()> {
             true,
             NO_EXPIRATION_LAST_VALID_SLOT,
             OrderType::Limit,
-            0,
         )],
-        None,
     );
     send_tx_with_retry(
         Rc::clone(&test_fixture.context),
@@ -299,7 +284,6 @@ async fn sync_remove_test() -> anyhow::Result<()> {
         vec![],
         false,
         vec![],
-        None,
     );
     send_tx_with_retry(
         Rc::clone(&test_fixture.context),
@@ -363,9 +347,7 @@ async fn wrapper_batch_update_cancel_all_test() -> anyhow::Result<()> {
             false,
             NO_EXPIRATION_LAST_VALID_SLOT,
             OrderType::Limit,
-            0,
         )],
-        None,
     );
     send_tx_with_retry(
         Rc::clone(&test_fixture.context),
@@ -382,7 +364,6 @@ async fn wrapper_batch_update_cancel_all_test() -> anyhow::Result<()> {
         vec![],
         true,
         vec![],
-        None,
     );
     send_tx_with_retry(
         Rc::clone(&test_fixture.context),
@@ -418,44 +399,6 @@ async fn wrapper_batch_update_cancel_all_test() -> anyhow::Result<()> {
         get_helper::<RBNode<MarketInfo>>(wrapper_dynamic_data, market_info_index).get_value();
     let orders_root_index: DataIndex = market_info.orders_root_index;
     assert_eq!(orders_root_index, NIL, "Deleted all orders in cancel all");
-
-    Ok(())
-}
-
-#[tokio::test]
-async fn wrapper_batch_update_trader_index_hint_test() -> anyhow::Result<()> {
-    let mut test_fixture: TestFixture = TestFixture::new().await;
-    test_fixture.claim_seat().await?;
-    test_fixture.deposit(Token::SOL, SOL_UNIT_SIZE).await?;
-
-    let payer: Pubkey = test_fixture.payer();
-    let payer_keypair: Keypair = test_fixture.payer_keypair().insecure_clone();
-
-    let batch_update_ix: Instruction = batch_update_instruction(
-        &test_fixture.market.key,
-        &payer,
-        &test_fixture.wrapper.key,
-        vec![WrapperCancelOrderParams::new(0)],
-        false,
-        vec![WrapperPlaceOrderParams::new(
-            0,
-            1 * SOL_UNIT_SIZE,
-            1,
-            0,
-            false,
-            NO_EXPIRATION_LAST_VALID_SLOT,
-            OrderType::Limit,
-            0,
-        )],
-        Some(0),
-    );
-    send_tx_with_retry(
-        Rc::clone(&test_fixture.context),
-        &[batch_update_ix],
-        Some(&payer),
-        &[&payer_keypair],
-    )
-    .await?;
 
     Ok(())
 }

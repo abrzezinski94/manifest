@@ -26,7 +26,7 @@ use solana_sdk::{
     program_pack::Pack, signature::Keypair, signer::Signer, system_instruction::create_account,
     transaction::Transaction,
 };
-use spl_token::state::Mint;
+use spl_token_2022::state::Mint;
 use std::rc::Rc;
 
 #[derive(PartialEq)]
@@ -116,6 +116,28 @@ impl TestFixture {
             payer_usdc_fixture,
             second_keypair,
         }
+    }
+
+    pub async fn try_new_for_matching_test() -> anyhow::Result<TestFixture, BanksClientError> {
+        let mut test_fixture = TestFixture::new().await;
+        let second_keypair = test_fixture.second_keypair.insecure_clone();
+
+        test_fixture.claim_seat().await?;
+        test_fixture
+            .deposit(Token::SOL, 1_000 * SOL_UNIT_SIZE)
+            .await?;
+        test_fixture
+            .deposit(Token::USDC, 10_000 * USDC_UNIT_SIZE)
+            .await?;
+
+        test_fixture.claim_seat_for_keypair(&second_keypair).await?;
+        test_fixture
+            .deposit_for_keypair(Token::SOL, 1_000 * SOL_UNIT_SIZE, &second_keypair)
+            .await?;
+        test_fixture
+            .deposit_for_keypair(Token::USDC, 10_000 * USDC_UNIT_SIZE, &second_keypair)
+            .await?;
+        Ok(test_fixture)
     }
 
     pub async fn try_load(
@@ -356,6 +378,7 @@ impl TestFixture {
             num_atoms,
             &trader_token_account,
             spl_token::id(),
+            None,
         );
 
         send_tx_with_retry(
@@ -427,6 +450,7 @@ impl TestFixture {
             num_atoms,
             &trader_token_account,
             spl_token::id(),
+            None,
         );
         send_tx_with_retry(
             Rc::clone(&self.context),

@@ -4,6 +4,7 @@ import {
   sendAndConfirmTransaction,
   PublicKey,
   Transaction,
+  TransactionInstruction,
 } from '@solana/web3.js';
 import { ManifestClient } from '../src/client';
 import { OrderType } from '../src/manifest/types';
@@ -105,7 +106,6 @@ export async function depositPlaceOrder(
   isBid: boolean,
   orderType: OrderType,
   clientOrderId: number,
-  minOutTokens: number = 0,
   lastValidSlot: number = 0,
 ): Promise<void> {
   const client: ManifestClient = await ManifestClient.getClientForMarket(
@@ -114,18 +114,15 @@ export async function depositPlaceOrder(
     payerKeypair,
   );
 
-  const depositPlaceOrderIx = client.placeOrderWithRequiredDepositIx(
-    payerKeypair.publicKey,
-    {
+  const depositPlaceOrderIx: TransactionInstruction[] =
+    await client.placeOrderWithRequiredDepositIx(payerKeypair.publicKey, {
       numBaseTokens,
       tokenPrice,
       isBid,
       lastValidSlot: lastValidSlot,
       orderType: orderType,
-      minOutTokens,
       clientOrderId,
-    },
-  );
+    });
 
   const signature = await sendAndConfirmTransaction(
     connection,

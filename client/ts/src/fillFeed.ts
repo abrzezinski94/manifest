@@ -4,14 +4,28 @@ import { Connection, ConfirmedSignatureInfo } from '@solana/web3.js';
 import { FillLog } from './manifest/accounts/FillLog';
 import { PROGRAM_ID } from './manifest';
 import { convertU128 } from './utils/numbers';
-import bs58 from 'bs58';
-import keccak256 from 'keccak256';
+import { genAccDiscriminator } from './utils/discriminator';
+import * as promClient from 'prom-client';
+import express from 'express';
+import promBundle from 'express-prom-bundle';
+import { FillLogResult } from './types';
+
+// For live monitoring of the fill feed. For a more complete look at fill
+// history stats, need to index all trades.
+const fills = new promClient.Counter({
+  name: 'fills',
+  help: 'Number of fills',
+  labelNames: ['market', 'isGlobal', 'takerIsBuy'] as const,
+});
 
 /**
  * FillFeed example implementation.
  */
 export class FillFeed {
   private wss: WebSocket.Server;
+  private shouldEnd: boolean = false;
+  private ended: boolean = false;
+
   constructor(private connection: Connection) {
     this.wss = new WebSocket.Server({ port: 1234 });
 
@@ -28,6 +42,27 @@ export class FillFeed {
     });
   }
 
+  public async stopParseLogs() {
+    this.shouldEnd = true;
+    const start = Date.now();
+    while (!this.ended) {
+      const timeout = 30_000;
+      const pollInterval = 500;
+
+      if (Date.now() - start > timeout) {
+        return Promise.reject(
+          new Error(
+            `failed to stop parseLogs after ${timeout / 1_000} seconds`,
+          ),
+        );
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, pollInterval));
+    }
+
+    return Promise.resolve();
+  }
+
   /**
    * Parse logs in an endless loop.
    */
@@ -42,7 +77,8 @@ export class FillFeed {
       ? new Date(Date.now() + 30_000)
       : new Date(Date.now() + 1_000_000_000_000);
 
-    while (new Date(Date.now()) < endTime) {
+    // TODO: remove endTime in favor of stopParseLogs for testing
+    while (!this.shouldEnd && new Date(Date.now()) < endTime) {
       await new Promise((f) => setTimeout(f, 10_000));
       const signatures: ConfirmedSignatureInfo[] =
         await this.connection.getSignaturesForAddress(PROGRAM_ID, {
@@ -59,7 +95,10 @@ export class FillFeed {
         await this.handleSignature(signature);
       }
     }
+
+    console.log('ended loop');
     this.wss.close();
+    this.ended = true;
   }
 
   /**
@@ -68,7 +107,9 @@ export class FillFeed {
    */
   private async handleSignature(signature: ConfirmedSignatureInfo) {
     console.log('Handling', signature.signature);
-    const tx = await this.connection.getTransaction(signature.signature)!;
+    const tx = await this.connection.getTransaction(signature.signature, {
+      maxSupportedTransactionVersion: 0,
+    });
     if (!tx?.meta?.logMessages) {
       console.log('No log messages');
       return;
@@ -106,10 +147,15 @@ export class FillFeed {
       const deserializedFillLog: FillLog = FillLog.deserialize(
         buffer.subarray(8),
       )[0];
-      console.log(
-        'Got a fill',
-        JSON.stringify(toFillLogResult(deserializedFillLog, signature.slot)),
+      const resultString: string = JSON.stringify(
+        toFillLogResult(deserializedFillLog, signature.slot),
       );
+      console.log('Got a fill', resultString);
+      fills.inc({
+        market: deserializedFillLog.market.toString(),
+        isGlobal: deserializedFillLog.isMakerGlobal.toString(),
+        takerIsBuy: deserializedFillLog.takerIsBuy.toString(),
+      });
       this.wss.clients.forEach((client) => {
         client.send(
           JSON.stringify(toFillLogResult(deserializedFillLog, signature.slot)),
@@ -128,50 +174,33 @@ export async function runFillFeed() {
     process.env.RPC_URL || 'http://127.0.0.1:8899',
     'confirmed',
   );
+
+  promClient.collectDefaultMetrics({
+    labels: {
+      app: 'fillFeed',
+    },
+  });
+
+  const register = new promClient.Registry();
+  register.setDefaultLabels({
+    app: 'fillFeed',
+  });
+  const metricsApp = express();
+  metricsApp.listen(8080);
+
+  const promMetrics = promBundle({
+    includeMethod: true,
+    metricsApp,
+    autoregister: false,
+  });
+  metricsApp.use(promMetrics);
+
   const fillFeed: FillFeed = new FillFeed(connection);
   await fillFeed.parseLogs();
 }
 
-/**
- * Helper function for getting account discriminator that matches how anchor
- * generates discriminators.
- */
-function genAccDiscriminator(accName: string) {
-  return keccak256(
-    Buffer.concat([
-      Buffer.from(bs58.decode(PROGRAM_ID.toBase58())),
-      Buffer.from('manifest::logs::'),
-      Buffer.from(accName),
-    ]),
-  ).subarray(0, 8);
-}
-const fillDiscriminant = genAccDiscriminator('FillLog');
+const fillDiscriminant = genAccDiscriminator('manifest::logs::FillLog');
 
-/**
- * FillLogResult is the message sent to subscribers of the FillFeed
- */
-export type FillLogResult = {
-  /** Public key for the market as base58. */
-  market: string;
-  /** Public key for the maker as base58. */
-  maker: string;
-  /** Public key for the taker as base58. */
-  taker: string;
-  /** Number of base atoms traded. */
-  baseAtoms: string;
-  /** Number of quote atoms traded. */
-  quoteAtoms: string;
-  /** Price as float. Quote atoms per base atom. */
-  price: number;
-  /** Boolean to indicate which side the trade was. */
-  takerIsBuy: boolean;
-  /** Sequential number for every order placed / matched wraps around at u64::MAX */
-  makerSequenceNumber: string;
-  /** Sequential number for every order placed / matched wraps around at u64::MAX */
-  takerSequenceNumber: string;
-  /** Slot number of the fill. */
-  slot: number;
-};
 function toFillLogResult(fillLog: FillLog, slot: number): FillLogResult {
   return {
     market: fillLog.market.toBase58(),
@@ -181,6 +210,7 @@ function toFillLogResult(fillLog: FillLog, slot: number): FillLogResult {
     quoteAtoms: fillLog.quoteAtoms.inner.toString(),
     price: convertU128(fillLog.price.inner),
     takerIsBuy: fillLog.takerIsBuy,
+    isMakerGlobal: fillLog.isMakerGlobal,
     makerSequenceNumber: fillLog.makerSequenceNumber.toString(),
     takerSequenceNumber: fillLog.takerSequenceNumber.toString(),
     slot,

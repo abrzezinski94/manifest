@@ -1022,8 +1022,17 @@ impl<'a, V: Payload> HyperTreeWriteOperations<'a, V> for RedBlackTree<'a, V> {
         if self.max_index != NIL && *get_helper::<RBNode<V>>(self.data, self.max_index) < new_node {
             self.max_index = index;
         }
+
         self.insert_node_no_fix(new_node, index);
-        self.insert_fix(index);
+
+        // Avoid recursion by doing a loop here.
+        let mut node_to_fix: DataIndex = index;
+        loop {
+            node_to_fix = self.insert_fix(node_to_fix);
+            if node_to_fix == NIL {
+                break;
+            }
+        }
 
         #[cfg(test)]
         self.verify_rb_tree::<V>()
@@ -1080,7 +1089,15 @@ impl<'a, V: Payload> HyperTreeWriteOperations<'a, V> for RedBlackTree<'a, V> {
         let child_index: DataIndex = self.get_child_index::<V>(index);
         let parent_index: DataIndex = self.get_parent_index::<V>(index);
         self.update_parent_child::<V>(index);
-        self.remove_fix(child_index, parent_index);
+
+        // Avoid recursion by doing a loop here.
+        let mut nodes_to_fix: (DataIndex, DataIndex) = (child_index, parent_index);
+        loop {
+            nodes_to_fix = self.remove_fix(nodes_to_fix.0, nodes_to_fix.1);
+            if nodes_to_fix.0 == NIL && nodes_to_fix.1 == NIL {
+                break;
+            }
+        }
     }
 }
 
@@ -1105,13 +1122,17 @@ impl<'a, V: Payload> RedBlackTree<'a, V> {
         self.remove_by_index(index);
     }
 
-    fn remove_fix(&mut self, current_index: DataIndex, parent_index: DataIndex) {
+    fn remove_fix(
+        &mut self,
+        current_index: DataIndex,
+        parent_index: DataIndex,
+    ) -> (DataIndex, DataIndex) {
         // Current is double black. It could be NIL if we just deleted a leaf,
         // so we need the parent to know where in the tree we are.
 
         // If we get to the root, then we are done.
         if self.root_index == current_index {
-            return;
+            return (NIL, NIL);
         }
 
         let sibling_index: DataIndex = self.get_sibling_index::<V>(current_index, parent_index);
@@ -1134,18 +1155,18 @@ impl<'a, V: Payload> RedBlackTree<'a, V> {
                 self.set_color::<V>(parent_index, sibling_color);
                 self.set_color::<V>(sibling_index, parent_color);
                 self.rotate_right::<V>(parent_index);
-                return;
+                return (NIL, NIL);
             }
             // ii left right
             if self.get_color::<V>(sibling_right_child_index) == Color::Red
                 && self.is_left_child::<V>(sibling_index)
             {
-                self.set_color::<V>(sibling_right_child_index, Color::Red);
+                self.set_color::<V>(sibling_right_child_index, parent_color);
                 self.set_color::<V>(parent_index, Color::Black);
                 self.set_color::<V>(sibling_index, Color::Black);
                 self.rotate_left::<V>(sibling_index);
                 self.rotate_right::<V>(parent_index);
-                return;
+                return (NIL, NIL);
             }
             // iii right right
             if self.get_color::<V>(sibling_right_child_index) == Color::Red
@@ -1155,18 +1176,18 @@ impl<'a, V: Payload> RedBlackTree<'a, V> {
                 self.set_color::<V>(parent_index, sibling_color);
                 self.set_color::<V>(sibling_index, parent_color);
                 self.rotate_left::<V>(parent_index);
-                return;
+                return (NIL, NIL);
             }
             // iv right left
             if self.get_color::<V>(sibling_left_child_index) == Color::Red
                 && self.is_right_child::<V>(sibling_index)
             {
-                self.set_color::<V>(sibling_left_child_index, Color::Red);
+                self.set_color::<V>(sibling_left_child_index, parent_color);
                 self.set_color::<V>(parent_index, Color::Black);
                 self.set_color::<V>(sibling_index, Color::Black);
                 self.rotate_right::<V>(sibling_index);
                 self.rotate_left::<V>(parent_index);
-                return;
+                return (NIL, NIL);
             }
             unreachable!();
         }
@@ -1176,12 +1197,10 @@ impl<'a, V: Payload> RedBlackTree<'a, V> {
         if sibling_color == Color::Black {
             self.set_color::<V>(sibling_index, Color::Red);
             if parent_color == Color::Black {
-                // Recurse on the parent
-                self.remove_fix(parent_index, self.get_parent_index::<V>(parent_index));
-                return;
+                return (parent_index, self.get_parent_index::<V>(parent_index));
             } else {
                 self.set_color::<V>(parent_index, Color::Black);
-                return;
+                return (NIL, NIL);
             }
         }
 
@@ -1191,13 +1210,14 @@ impl<'a, V: Payload> RedBlackTree<'a, V> {
             self.rotate_right::<V>(parent_index);
             self.set_color::<V>(parent_index, Color::Red);
             self.set_color::<V>(sibling_index, Color::Black);
-            self.remove_fix(current_index, parent_index);
+            return (current_index, parent_index);
         } else if self.is_right_child::<V>(sibling_index) {
             self.rotate_left::<V>(parent_index);
             self.set_color::<V>(parent_index, Color::Red);
             self.set_color::<V>(sibling_index, Color::Black);
-            self.remove_fix(current_index, parent_index);
+            return (current_index, parent_index);
         }
+        return (NIL, NIL);
     }
 
     /// Insert a node into the subtree without fixing. This node could be a leaf
@@ -1258,10 +1278,10 @@ impl<'a, V: Payload> RedBlackTree<'a, V> {
         }
     }
 
-    fn insert_fix(&mut self, index_to_fix: DataIndex) {
+    fn insert_fix(&mut self, index_to_fix: DataIndex) -> DataIndex {
         if self.root_index == index_to_fix {
             self.set_color::<V>(index_to_fix, Color::Black);
-            return;
+            return NIL;
         }
 
         // Check the color of the parent. If it is black, then nothing left to do.
@@ -1269,7 +1289,7 @@ impl<'a, V: Payload> RedBlackTree<'a, V> {
         let parent_color: Color = self.get_color::<V>(parent_index);
 
         if parent_color == Color::Black {
-            return;
+            return NIL;
         }
 
         let grandparent_index: DataIndex = self.get_parent_index::<V>(parent_index);
@@ -1296,9 +1316,7 @@ impl<'a, V: Payload> RedBlackTree<'a, V> {
             self.set_color::<V>(uncle_index, Color::Black);
             self.set_color::<V>(grandparent_index, Color::Red);
 
-            // Recurse
-            self.insert_fix(grandparent_index);
-            return;
+            return grandparent_index;
         }
 
         let grandparent_color: Color = self.get_color::<V>(grandparent_index);
@@ -1310,7 +1328,7 @@ impl<'a, V: Payload> RedBlackTree<'a, V> {
 
         if grandparent_index == NIL && parent_color == Color::Red {
             self.set_color::<V>(parent_index, Color::Black);
-            return;
+            return NIL;
         }
 
         // Case II: Uncle is black, left left
@@ -1340,6 +1358,7 @@ impl<'a, V: Payload> RedBlackTree<'a, V> {
             self.set_color::<V>(index_to_fix, grandparent_color);
             self.set_color::<V>(grandparent_index, index_to_fix_color);
         }
+        NIL
     }
 }
 
@@ -2230,6 +2249,334 @@ pub(crate) mod test {
         tree.pretty_print::<TestOrderBid>();
 
         tree.insert(5 * TEST_BLOCK_WIDTH, TestOrderAsk::new(0));
+        tree.verify_rb_tree::<TestOrderBid>();
+    }
+
+    #[test]
+    fn test_regression_5() {
+        let mut data: [u8; 100000] = [0; 100000];
+        *get_mut_helper(&mut data, 1 * TEST_BLOCK_WIDTH) = RBNode {
+            left: 2 * TEST_BLOCK_WIDTH,
+            right: 3 * TEST_BLOCK_WIDTH,
+            parent: NIL,
+            color: Color::Black,
+            payload_type: 0,
+            _unused_padding: 0,
+            value: TestOrderBid::new(1),
+        };
+        *get_mut_helper(&mut data, 2 * TEST_BLOCK_WIDTH) = RBNode {
+            left: 4 * TEST_BLOCK_WIDTH,
+            right: 22 * TEST_BLOCK_WIDTH,
+            parent: 1 * TEST_BLOCK_WIDTH,
+            color: Color::Red,
+            payload_type: 0,
+            _unused_padding: 0,
+            value: TestOrderBid::new(2),
+        };
+        *get_mut_helper(&mut data, 3 * TEST_BLOCK_WIDTH) = RBNode {
+            left: 29 * TEST_BLOCK_WIDTH,
+            right: 5 * TEST_BLOCK_WIDTH,
+            parent: 1 * TEST_BLOCK_WIDTH,
+            color: Color::Red,
+            payload_type: 0,
+            _unused_padding: 0,
+            value: TestOrderBid::new(3),
+        };
+        *get_mut_helper(&mut data, 4 * TEST_BLOCK_WIDTH) = RBNode {
+            left: 6 * TEST_BLOCK_WIDTH,
+            right: 7 * TEST_BLOCK_WIDTH,
+            parent: 2 * TEST_BLOCK_WIDTH,
+            color: Color::Black,
+            payload_type: 0,
+            _unused_padding: 0,
+            value: TestOrderBid::new(4),
+        };
+        *get_mut_helper(&mut data, 5 * TEST_BLOCK_WIDTH) = RBNode {
+            left: 8 * TEST_BLOCK_WIDTH,
+            right: 9 * TEST_BLOCK_WIDTH,
+            parent: 3 * TEST_BLOCK_WIDTH,
+            color: Color::Black,
+            payload_type: 0,
+            _unused_padding: 0,
+            value: TestOrderBid::new(5),
+        };
+        *get_mut_helper(&mut data, 6 * TEST_BLOCK_WIDTH) = RBNode {
+            left: 10 * TEST_BLOCK_WIDTH,
+            right: 20 * TEST_BLOCK_WIDTH,
+            parent: 4 * TEST_BLOCK_WIDTH,
+            color: Color::Black,
+            payload_type: 0,
+            _unused_padding: 0,
+            value: TestOrderBid::new(6),
+        };
+        *get_mut_helper(&mut data, 7 * TEST_BLOCK_WIDTH) = RBNode {
+            left: 11 * TEST_BLOCK_WIDTH,
+            right: 12 * TEST_BLOCK_WIDTH,
+            parent: 4 * TEST_BLOCK_WIDTH,
+            color: Color::Black,
+            payload_type: 0,
+            _unused_padding: 0,
+            value: TestOrderBid::new(7),
+        };
+        *get_mut_helper(&mut data, 8 * TEST_BLOCK_WIDTH) = RBNode {
+            left: 13 * TEST_BLOCK_WIDTH,
+            right: 21 * TEST_BLOCK_WIDTH,
+            parent: 5 * TEST_BLOCK_WIDTH,
+            color: Color::Black,
+            payload_type: 0,
+            _unused_padding: 0,
+            value: TestOrderBid::new(8),
+        };
+        *get_mut_helper(&mut data, 9 * TEST_BLOCK_WIDTH) = RBNode {
+            left: 14 * TEST_BLOCK_WIDTH,
+            right: 15 * TEST_BLOCK_WIDTH,
+            parent: 5 * TEST_BLOCK_WIDTH,
+            color: Color::Black,
+            payload_type: 0,
+            _unused_padding: 0,
+            value: TestOrderBid::new(9),
+        };
+        *get_mut_helper(&mut data, 10 * TEST_BLOCK_WIDTH) = RBNode {
+            left: NIL,
+            right: NIL,
+            parent: 6 * TEST_BLOCK_WIDTH,
+            color: Color::Black,
+            payload_type: 0,
+            _unused_padding: 0,
+            value: TestOrderBid::new(10),
+        };
+        *get_mut_helper(&mut data, 11 * TEST_BLOCK_WIDTH) = RBNode {
+            left: 16 * TEST_BLOCK_WIDTH,
+            right: 17 * TEST_BLOCK_WIDTH,
+            parent: 7 * TEST_BLOCK_WIDTH,
+            color: Color::Red,
+            payload_type: 0,
+            _unused_padding: 0,
+            value: TestOrderBid::new(11),
+        };
+        *get_mut_helper(&mut data, 12 * TEST_BLOCK_WIDTH) = RBNode {
+            left: NIL,
+            right: NIL,
+            parent: 7 * TEST_BLOCK_WIDTH,
+            color: Color::Black,
+            payload_type: 0,
+            _unused_padding: 0,
+            value: TestOrderBid::new(12),
+        };
+        *get_mut_helper(&mut data, 13 * TEST_BLOCK_WIDTH) = RBNode {
+            left: NIL,
+            right: NIL,
+            parent: 8 * TEST_BLOCK_WIDTH,
+            color: Color::Black,
+            payload_type: 0,
+            _unused_padding: 0,
+            value: TestOrderBid::new(13),
+        };
+        *get_mut_helper(&mut data, 14 * TEST_BLOCK_WIDTH) = RBNode {
+            left: 18 * TEST_BLOCK_WIDTH,
+            right: 19 * TEST_BLOCK_WIDTH,
+            parent: 9 * TEST_BLOCK_WIDTH,
+            color: Color::Red,
+            payload_type: 0,
+            _unused_padding: 0,
+            value: TestOrderBid::new(14),
+        };
+        *get_mut_helper(&mut data, 15 * TEST_BLOCK_WIDTH) = RBNode {
+            left: NIL,
+            right: NIL,
+            parent: 9 * TEST_BLOCK_WIDTH,
+            color: Color::Black,
+            payload_type: 0,
+            _unused_padding: 0,
+            value: TestOrderBid::new(15),
+        };
+        *get_mut_helper(&mut data, 16 * TEST_BLOCK_WIDTH) = RBNode {
+            left: NIL,
+            right: NIL,
+            parent: 11 * TEST_BLOCK_WIDTH,
+            color: Color::Black,
+            payload_type: 0,
+            _unused_padding: 0,
+            value: TestOrderBid::new(16),
+        };
+        *get_mut_helper(&mut data, 17 * TEST_BLOCK_WIDTH) = RBNode {
+            left: NIL,
+            right: NIL,
+            parent: 11 * TEST_BLOCK_WIDTH,
+            color: Color::Black,
+            payload_type: 0,
+            _unused_padding: 0,
+            value: TestOrderBid::new(17),
+        };
+        *get_mut_helper(&mut data, 18 * TEST_BLOCK_WIDTH) = RBNode {
+            left: NIL,
+            right: NIL,
+            parent: 14 * TEST_BLOCK_WIDTH,
+            color: Color::Black,
+            payload_type: 0,
+            _unused_padding: 0,
+            value: TestOrderBid::new(18),
+        };
+        *get_mut_helper(&mut data, 19 * TEST_BLOCK_WIDTH) = RBNode {
+            left: NIL,
+            right: NIL,
+            parent: 14 * TEST_BLOCK_WIDTH,
+            color: Color::Black,
+            payload_type: 0,
+            _unused_padding: 0,
+            value: TestOrderBid::new(19),
+        };
+        *get_mut_helper(&mut data, 20 * TEST_BLOCK_WIDTH) = RBNode {
+            left: NIL,
+            right: NIL,
+            parent: 6 * TEST_BLOCK_WIDTH,
+            color: Color::Black,
+            payload_type: 0,
+            _unused_padding: 0,
+            value: TestOrderBid::new(20),
+        };
+        *get_mut_helper(&mut data, 21 * TEST_BLOCK_WIDTH) = RBNode {
+            left: NIL,
+            right: NIL,
+            parent: 8 * TEST_BLOCK_WIDTH,
+            color: Color::Black,
+            payload_type: 0,
+            _unused_padding: 0,
+            value: TestOrderBid::new(21),
+        };
+        *get_mut_helper(&mut data, 22 * TEST_BLOCK_WIDTH) = RBNode {
+            left: 23 * TEST_BLOCK_WIDTH,
+            right: 24 * TEST_BLOCK_WIDTH,
+            parent: 2 * TEST_BLOCK_WIDTH,
+            color: Color::Black,
+            payload_type: 0,
+            _unused_padding: 0,
+            value: TestOrderBid::new(22),
+        };
+        *get_mut_helper(&mut data, 23 * TEST_BLOCK_WIDTH) = RBNode {
+            left: 25 * TEST_BLOCK_WIDTH,
+            right: 26 * TEST_BLOCK_WIDTH,
+            parent: 22 * TEST_BLOCK_WIDTH,
+            color: Color::Black,
+            payload_type: 0,
+            _unused_padding: 0,
+            value: TestOrderBid::new(23),
+        };
+        *get_mut_helper(&mut data, 24 * TEST_BLOCK_WIDTH) = RBNode {
+            left: 27 * TEST_BLOCK_WIDTH,
+            right: 28 * TEST_BLOCK_WIDTH,
+            parent: 22 * TEST_BLOCK_WIDTH,
+            color: Color::Black,
+            payload_type: 0,
+            _unused_padding: 0,
+            value: TestOrderBid::new(24),
+        };
+        *get_mut_helper(&mut data, 25 * TEST_BLOCK_WIDTH) = RBNode {
+            left: NIL,
+            right: NIL,
+            parent: 23 * TEST_BLOCK_WIDTH,
+            color: Color::Black,
+            payload_type: 0,
+            _unused_padding: 0,
+            value: TestOrderBid::new(25),
+        };
+        *get_mut_helper(&mut data, 26 * TEST_BLOCK_WIDTH) = RBNode {
+            left: NIL,
+            right: NIL,
+            parent: 23 * TEST_BLOCK_WIDTH,
+            color: Color::Black,
+            payload_type: 0,
+            _unused_padding: 0,
+            value: TestOrderBid::new(26),
+        };
+        *get_mut_helper(&mut data, 27 * TEST_BLOCK_WIDTH) = RBNode {
+            left: NIL,
+            right: NIL,
+            parent: 24 * TEST_BLOCK_WIDTH,
+            color: Color::Black,
+            payload_type: 0,
+            _unused_padding: 0,
+            value: TestOrderBid::new(27),
+        };
+        *get_mut_helper(&mut data, 28 * TEST_BLOCK_WIDTH) = RBNode {
+            left: NIL,
+            right: NIL,
+            parent: 24 * TEST_BLOCK_WIDTH,
+            color: Color::Black,
+            payload_type: 0,
+            _unused_padding: 0,
+            value: TestOrderBid::new(28),
+        };
+        *get_mut_helper(&mut data, 29 * TEST_BLOCK_WIDTH) = RBNode {
+            left: 30 * TEST_BLOCK_WIDTH,
+            right: 31 * TEST_BLOCK_WIDTH,
+            parent: 3 * TEST_BLOCK_WIDTH,
+            color: Color::Black,
+            payload_type: 0,
+            _unused_padding: 0,
+            value: TestOrderBid::new(29),
+        };
+        *get_mut_helper(&mut data, 30 * TEST_BLOCK_WIDTH) = RBNode {
+            left: 32 * TEST_BLOCK_WIDTH,
+            right: 33 * TEST_BLOCK_WIDTH,
+            parent: 29 * TEST_BLOCK_WIDTH,
+            color: Color::Black,
+            payload_type: 0,
+            _unused_padding: 0,
+            value: TestOrderBid::new(30),
+        };
+        *get_mut_helper(&mut data, 31 * TEST_BLOCK_WIDTH) = RBNode {
+            left: 34 * TEST_BLOCK_WIDTH,
+            right: 35 * TEST_BLOCK_WIDTH,
+            parent: 29 * TEST_BLOCK_WIDTH,
+            color: Color::Black,
+            payload_type: 0,
+            _unused_padding: 0,
+            value: TestOrderBid::new(31),
+        };
+        *get_mut_helper(&mut data, 32 * TEST_BLOCK_WIDTH) = RBNode {
+            left: NIL,
+            right: NIL,
+            parent: 30 * TEST_BLOCK_WIDTH,
+            color: Color::Black,
+            payload_type: 0,
+            _unused_padding: 0,
+            value: TestOrderBid::new(32),
+        };
+        *get_mut_helper(&mut data, 33 * TEST_BLOCK_WIDTH) = RBNode {
+            left: NIL,
+            right: NIL,
+            parent: 30 * TEST_BLOCK_WIDTH,
+            color: Color::Black,
+            payload_type: 0,
+            _unused_padding: 0,
+            value: TestOrderBid::new(33),
+        };
+        *get_mut_helper(&mut data, 34 * TEST_BLOCK_WIDTH) = RBNode {
+            left: NIL,
+            right: NIL,
+            parent: 31 * TEST_BLOCK_WIDTH,
+            color: Color::Black,
+            payload_type: 0,
+            _unused_padding: 0,
+            value: TestOrderBid::new(34),
+        };
+        *get_mut_helper(&mut data, 35 * TEST_BLOCK_WIDTH) = RBNode {
+            left: NIL,
+            right: NIL,
+            parent: 31 * TEST_BLOCK_WIDTH,
+            color: Color::Black,
+            payload_type: 0,
+            _unused_padding: 0,
+            value: TestOrderBid::new(35),
+        };
+
+        let mut tree: RedBlackTree<TestOrderBid> =
+            RedBlackTree::new(&mut data, 1 * TEST_BLOCK_WIDTH, 15 * TEST_BLOCK_WIDTH);
+        tree.verify_rb_tree::<TestOrderBid>();
+
+        tree.remove_by_index(6 * TEST_BLOCK_WIDTH);
+
         tree.verify_rb_tree::<TestOrderBid>();
     }
 

@@ -1,10 +1,13 @@
 import { Connection, PublicKey } from '@solana/web3.js';
 import { bignum } from '@metaplex-foundation/beet';
 import { publicKey as beetPublicKey } from '@metaplex-foundation/beet-solana';
-import { marketInfoBeet, openOrderBeet } from './utils/beet';
+import { openOrderBeet } from './utils/beet';
 import { FIXED_WRAPPER_HEADER_SIZE, NIL } from './constants';
 import { OrderType } from './manifest';
 import { deserializeRedBlackTree } from './utils/redBlackTree';
+import { MarketInfo, marketInfoBeet } from './wrapper/types';
+import { convertU128 } from './utils/numbers';
+import BN from 'bn.js';
 
 /**
  * All data stored on a wrapper account.
@@ -26,6 +29,8 @@ export interface MarketInfoParsed {
   baseBalanceAtoms: bignum;
   /** Quote balance in atoms. */
   quoteBalanceAtoms: bignum;
+  /** Quote volume in atoms. */
+  quoteVolumeAtoms: bignum;
   /** Open orders. */
   orders: OpenOrder[];
   /** Last update slot number. */
@@ -59,7 +64,7 @@ export interface OpenOrder {
   /** Number of base atoms in the order. */
   numBaseAtoms: bignum;
   /** Hint for the location of the order in the manifest dynamic data. */
-  dataIndex: number;
+  marketDataIndex: number;
   /** Last slot before this order is invalid and will be removed. */
   lastValidSlot: number;
   /** Boolean for whether this order is on the bid side. */
@@ -73,7 +78,7 @@ export interface OpenOrderInternal {
   clientOrderId: bignum;
   orderSequenceNumber: bignum;
   numBaseAtoms: bignum;
-  dataIndex: number;
+  marketDataIndex: number;
   lastValidSlot: number;
   isBid: boolean;
   orderType: number;
@@ -258,7 +263,7 @@ export class Wrapper {
     const _padding = data.readUInt32LE(offset);
     offset += 12;
 
-    const marketInfos: MarketInfoRaw[] =
+    const marketInfos: MarketInfo[] =
       marketInfosRootIndex != NIL
         ? deserializeRedBlackTree(
             data.subarray(FIXED_WRAPPER_HEADER_SIZE),
@@ -268,8 +273,8 @@ export class Wrapper {
         : [];
 
     const parsedMarketInfos: MarketInfoParsed[] = marketInfos.map(
-      (marketInfoRaw: MarketInfoRaw) => {
-        const rootIndex: number = marketInfoRaw.openOrdersRootIndex;
+      (marketInfoRaw: MarketInfo) => {
+        const rootIndex: number = marketInfoRaw.ordersRootIndex;
         const parsedOpenOrders: OpenOrderInternal[] =
           rootIndex != NIL
             ? deserializeRedBlackTree(
@@ -283,15 +288,16 @@ export class Wrapper {
           (openOrder: OpenOrderInternal) => {
             return {
               ...openOrder,
-              price: 0,
+              price: convertU128(new BN(openOrder.price, 10, 'le')),
             };
           },
         );
 
         return {
           market: marketInfoRaw.market,
-          baseBalanceAtoms: marketInfoRaw.baseBalanceAtoms,
-          quoteBalanceAtoms: marketInfoRaw.quoteBalanceAtoms,
+          baseBalanceAtoms: marketInfoRaw.baseBalance,
+          quoteBalanceAtoms: marketInfoRaw.quoteBalance,
+          quoteVolumeAtoms: marketInfoRaw.quoteVolume,
           orders: parsedOpenOrdersWithPrice,
           lastUpdatedSlot: marketInfoRaw.lastUpdatedSlot,
         };

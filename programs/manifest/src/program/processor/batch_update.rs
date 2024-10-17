@@ -2,12 +2,12 @@ use std::{cell::RefMut, mem::size_of};
 
 use crate::{
     logs::{emit_stack, CancelOrderLog, PlaceOrderLog},
-    program::ManifestError,
+    program::{get_trader_index_with_hint, ManifestError},
     quantities::{BaseAtoms, PriceConversionError, QuoteAtomsPerBaseAtom, WrapperU64},
     require,
     state::{
-        claimed_seat::ClaimedSeat, utils::get_now_slot, AddOrderToMarketArgs,
-        AddOrderToMarketResult, MarketRefMut, OrderType, RestingOrder, MARKET_BLOCK_SIZE,
+        utils::get_now_slot, AddOrderToMarketArgs, AddOrderToMarketResult, MarketRefMut, OrderType,
+        RestingOrder, MARKET_BLOCK_SIZE,
     },
     validation::loaders::BatchUpdateContext,
 };
@@ -126,6 +126,8 @@ pub struct BatchUpdateReturn {
 #[repr(u8)]
 #[derive(Debug, Copy, Clone, PartialEq, Default)]
 pub enum MarketDataTreeNodeType {
+    // 0 is reserved because zeroed byte arrays should be empty.
+    Empty = 0,
     #[default]
     ClaimedSeat = 1,
     RestingOrder = 2,
@@ -156,50 +158,20 @@ pub(crate) fn process_batch_update(
 
     let trader_index: DataIndex = {
         let market_data: &mut RefMut<&mut [u8]> = &mut market.try_borrow_mut_data()?;
-        let dynamic_account: MarketRefMut = get_mut_dynamic_account(market_data);
-
-        let trader_index: DataIndex = match trader_index_hint {
-            None => {
-                let mut dynamic_account: MarketRefMut = get_mut_dynamic_account(market_data);
-                dynamic_account.get_trader_index(payer.key)
-            }
-            Some(hinted_index) => {
-                require!(
-                    hinted_index % (MARKET_BLOCK_SIZE as DataIndex) == 0,
-                    ManifestError::WrongIndexHintParams,
-                    "Invalid trader hint index {}",
-                    hinted_index,
-                )?;
-                require!(
-                    get_helper::<RBNode<ClaimedSeat>>(&dynamic_account.dynamic, hinted_index)
-                        .get_payload_type()
-                        == MarketDataTreeNodeType::ClaimedSeat as u8,
-                    ManifestError::WrongIndexHintParams,
-                    "Invalid trader hint index {}",
-                    hinted_index,
-                )?;
-                require!(
-                    payer
-                        .key
-                        .eq(dynamic_account.get_trader_key_by_index(hinted_index)),
-                    ManifestError::WrongIndexHintParams,
-                    "Invalid trader hint",
-                )?;
-                hinted_index
-            }
-        };
-
         let mut dynamic_account: MarketRefMut = get_mut_dynamic_account(market_data);
-        for cancel in cancels {
+        let trader_index: DataIndex =
+            get_trader_index_with_hint(trader_index_hint, &dynamic_account, &payer)?;
+
+        for cancel_order_params in cancels {
             // Hinted is preferred because that is O(1) to find and O(log n) to
             // remove. Without the hint, we lookup by order_sequence_number and
             // that is O(n) lookup and O(log n) delete.
-            match cancel.order_index_hint() {
+            match cancel_order_params.order_index_hint() {
                 None => {
                     // Cancels must succeed otherwise we fail the tx.
                     dynamic_account.cancel_order(
                         trader_index,
-                        cancel.order_sequence_number(),
+                        cancel_order_params.order_sequence_number(),
                         &global_trade_accounts_opts,
                     )?;
                 }
@@ -232,18 +204,21 @@ pub(crate) fn process_batch_update(
                         "Invalid cancel hint index {}",
                         hinted_cancel_index,
                     )?;
-                    dynamic_account.cancel_order_by_index(
-                        trader_index,
+                    require!(
+                        cancel_order_params.order_sequence_number() == order.get_sequence_number(),
+                        ManifestError::WrongIndexHintParams,
+                        "Invalid cancel hint sequence number index {}",
                         hinted_cancel_index,
-                        &global_trade_accounts_opts,
                     )?;
+                    dynamic_account
+                        .cancel_order_by_index(hinted_cancel_index, &global_trade_accounts_opts)?;
                 }
             };
 
             emit_stack(CancelOrderLog {
                 market: *market.key,
                 trader: *payer.key,
-                order_sequence_number: cancel.order_sequence_number(),
+                order_sequence_number: cancel_order_params.order_sequence_number(),
             })?;
         }
         trader_index
@@ -251,12 +226,12 @@ pub(crate) fn process_batch_update(
 
     // Result is a vector of (order_sequence_number, data_index)
     let mut result: Vec<(u64, DataIndex)> = Vec::with_capacity(orders.len());
-    for place_order in orders {
+    for place_order_params in orders {
         {
-            let base_atoms: BaseAtoms = BaseAtoms::new(place_order.base_atoms());
-            let price: QuoteAtomsPerBaseAtom = place_order.try_price()?;
-            let order_type: OrderType = place_order.order_type();
-            let last_valid_slot: u32 = place_order.last_valid_slot();
+            let base_atoms: BaseAtoms = BaseAtoms::new(place_order_params.base_atoms());
+            let price: QuoteAtomsPerBaseAtom = place_order_params.try_price()?;
+            let order_type: OrderType = place_order_params.order_type();
+            let last_valid_slot: u32 = place_order_params.last_valid_slot();
 
             // Need to reborrow every iteration so we can borrow later for expanding.
             let market_data: &mut RefMut<&mut [u8]> = &mut market.try_borrow_mut_data()?;
@@ -268,7 +243,7 @@ pub(crate) fn process_batch_update(
                     trader_index,
                     num_base_atoms: base_atoms,
                     price,
-                    is_bid: place_order.is_bid(),
+                    is_bid: place_order_params.is_bid(),
                     last_valid_slot,
                     order_type,
                     global_trade_accounts_opts: &global_trade_accounts_opts,
@@ -287,7 +262,7 @@ pub(crate) fn process_batch_update(
                 base_atoms,
                 price,
                 order_type,
-                is_bid: PodBool::from(place_order.is_bid()),
+                is_bid: PodBool::from(place_order_params.is_bid()),
                 _padding: [0; 6],
                 order_sequence_number,
                 order_index,
