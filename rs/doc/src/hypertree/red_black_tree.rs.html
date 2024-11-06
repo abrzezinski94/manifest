@@ -2666,25 +2666,6 @@
 <a href="#2664" id="2664">2664</a>
 <a href="#2665" id="2665">2665</a>
 <a href="#2666" id="2666">2666</a>
-<a href="#2667" id="2667">2667</a>
-<a href="#2668" id="2668">2668</a>
-<a href="#2669" id="2669">2669</a>
-<a href="#2670" id="2670">2670</a>
-<a href="#2671" id="2671">2671</a>
-<a href="#2672" id="2672">2672</a>
-<a href="#2673" id="2673">2673</a>
-<a href="#2674" id="2674">2674</a>
-<a href="#2675" id="2675">2675</a>
-<a href="#2676" id="2676">2676</a>
-<a href="#2677" id="2677">2677</a>
-<a href="#2678" id="2678">2678</a>
-<a href="#2679" id="2679">2679</a>
-<a href="#2680" id="2680">2680</a>
-<a href="#2681" id="2681">2681</a>
-<a href="#2682" id="2682">2682</a>
-<a href="#2683" id="2683">2683</a>
-<a href="#2684" id="2684">2684</a>
-<a href="#2685" id="2685">2685</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>bytemuck::{Pod, Zeroable};
 <span class="kw">use </span>std::cmp::Ordering;
 
@@ -2885,9 +2866,7 @@
 <span class="kw">where
     </span>T: GetRedBlackTreeReadOnlyData&lt;<span class="lifetime">'a</span>&gt;,
 {
-    <span class="comment">// TODO: Make unchecked versions of these to avoid unnecessary NIL checks
-    // when we already know the index is not NIL.
-    </span><span class="kw">fn </span>get_value&lt;V: Payload&gt;(<span class="kw-2">&amp;</span><span class="lifetime">'a </span><span class="self">self</span>, index: DataIndex) -&gt; <span class="kw-2">&amp;</span><span class="lifetime">'a </span>V {
+    <span class="kw">fn </span>get_value&lt;V: Payload&gt;(<span class="kw-2">&amp;</span><span class="lifetime">'a </span><span class="self">self</span>, index: DataIndex) -&gt; <span class="kw-2">&amp;</span><span class="lifetime">'a </span>V {
         <span class="macro">debug_assert_ne!</span>(index, NIL);
         <span class="kw">let </span>node: <span class="kw-2">&amp;</span>RBNode&lt;V&gt; = get_helper::&lt;RBNode&lt;V&gt;&gt;(<span class="self">self</span>.data(), index);
         <span class="kw-2">&amp;</span>node.value
@@ -2932,9 +2911,7 @@
     }
 
     <span class="kw">fn </span>is_left_child&lt;V: Payload&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, index: DataIndex) -&gt; bool {
-        <span class="comment">// TODO: Explore if we can store is_left_child and is_right_child in the
-        // empty bits after color to avoid the compute of checking the parent.
-        </span><span class="kw">if </span>index == <span class="self">self</span>.root_index() {
+        <span class="kw">if </span>index == <span class="self">self</span>.root_index() {
             <span class="kw">return </span><span class="bool-val">false</span>;
         }
         <span class="kw">let </span>parent_index: DataIndex = <span class="self">self</span>.get_parent_index::&lt;V&gt;(index);
@@ -3045,7 +3022,6 @@
 
         </span><span class="kw">let </span>g_index: DataIndex = index;
         <span class="kw">let </span>p_index: DataIndex = <span class="self">self</span>.get_right_index::&lt;V&gt;(g_index);
-        <span class="kw">let </span>x_index: DataIndex = <span class="self">self</span>.get_right_index::&lt;V&gt;(p_index);
         <span class="kw">let </span>y_index: DataIndex = <span class="self">self</span>.get_left_index::&lt;V&gt;(p_index);
         <span class="kw">let </span>gg_index: DataIndex = <span class="self">self</span>.get_parent_index::&lt;V&gt;(index);
 
@@ -3055,7 +3031,6 @@
             </span><span class="kw">let </span>p_node: <span class="kw-2">&amp;mut </span>RBNode&lt;V&gt; = get_mut_helper::&lt;RBNode&lt;V&gt;&gt;(<span class="self">self</span>.data(), p_index);
             p_node.parent = gg_index;
             p_node.left = g_index;
-            p_node.right = x_index;
         }
 
         <span class="comment">// Y
@@ -3102,7 +3077,6 @@
 
         </span><span class="kw">let </span>g_index: DataIndex = index;
         <span class="kw">let </span>p_index: DataIndex = <span class="self">self</span>.get_left_index::&lt;V&gt;(g_index);
-        <span class="kw">let </span>x_index: DataIndex = <span class="self">self</span>.get_left_index::&lt;V&gt;(p_index);
         <span class="kw">let </span>y_index: DataIndex = <span class="self">self</span>.get_right_index::&lt;V&gt;(p_index);
         <span class="kw">let </span>gg_index: DataIndex = <span class="self">self</span>.get_parent_index::&lt;V&gt;(index);
 
@@ -3111,7 +3085,6 @@
             <span class="comment">// Does not use the helpers to avoid redundant NIL checks.
             </span><span class="kw">let </span>p_node: <span class="kw-2">&amp;mut </span>RBNode&lt;V&gt; = get_mut_helper::&lt;RBNode&lt;V&gt;&gt;(<span class="self">self</span>.data(), p_index);
             p_node.parent = gg_index;
-            p_node.left = x_index;
             p_node.right = g_index;
         }
 
@@ -3182,11 +3155,27 @@
         <span class="self">self</span>.set_parent_index::&lt;V&gt;(right_0, index_1);
         <span class="self">self</span>.set_parent_index::&lt;V&gt;(right_1, index_0);
 
-        <span class="comment">// Edge case of swapping with successor.
+        <span class="comment">// Edge case of swapping with successor or predecessor. Note that the
+        // way that this is called in practice, only the parent_1 == index_1 &amp;&amp;
+        // !is_left_1 case is covered. The rest are included for completeness in
+        // case any implementation decides to use swap with a different usage.
         </span><span class="kw">if </span>parent_1 == index_0 {
             <span class="self">self</span>.set_parent_index::&lt;V&gt;(index_0, index_1);
             <span class="self">self</span>.set_parent_index::&lt;V&gt;(index_1, parent_0);
-            <span class="self">self</span>.set_right_index::&lt;V&gt;(index_1, index_0);
+            <span class="kw">if </span>is_left_1 {
+                <span class="self">self</span>.set_left_index::&lt;V&gt;(index_1, index_0);
+            } <span class="kw">else </span>{
+                <span class="self">self</span>.set_right_index::&lt;V&gt;(index_1, index_0);
+            }
+        }
+        <span class="kw">if </span>parent_0 == index_1 {
+            <span class="self">self</span>.set_parent_index::&lt;V&gt;(index_1, index_0);
+            <span class="self">self</span>.set_parent_index::&lt;V&gt;(index_0, parent_1);
+            <span class="kw">if </span>is_left_0 {
+                <span class="self">self</span>.set_left_index::&lt;V&gt;(index_0, index_1);
+            } <span class="kw">else </span>{
+                <span class="self">self</span>.set_right_index::&lt;V&gt;(index_0, index_1);
+            }
         }
 
         <span class="comment">// Should not happen because we only swap with successor of an
@@ -3324,27 +3313,16 @@
     }
 
     <span class="doccomment">/// Get the next index. This walks the tree, so does not care about equal
-    /// keys. Used in swapping when insert/delete requires an internal node.
+    /// keys. Used to swap an internal node with the next leaf, when insert
+    /// or delete points at an internal node.
+    /// It should never be called on leaf nodes.
     </span><span class="kw">fn </span>get_next_higher_index&lt;V: Payload&gt;(<span class="kw-2">&amp;</span><span class="lifetime">'a </span><span class="self">self</span>, index: DataIndex) -&gt; DataIndex {
-        <span class="kw">if </span>index == NIL {
-            <span class="kw">return </span>NIL;
+        <span class="macro">debug_assert!</span>(index != NIL);
+        <span class="macro">debug_assert!</span>(<span class="self">self</span>.get_right_index::&lt;V&gt;(index) != NIL);
+        <span class="kw">let </span><span class="kw-2">mut </span>current_index: DataIndex = <span class="self">self</span>.get_right_index::&lt;V&gt;(index);
+        <span class="kw">while </span><span class="self">self</span>.get_left_index::&lt;V&gt;(current_index) != NIL {
+            current_index = <span class="self">self</span>.get_left_index::&lt;V&gt;(current_index);
         }
-        <span class="comment">// Successor is below us.
-        </span><span class="kw">if </span><span class="self">self</span>.get_right_index::&lt;V&gt;(index) != NIL {
-            <span class="kw">let </span><span class="kw-2">mut </span>current_index: DataIndex = <span class="self">self</span>.get_right_index::&lt;V&gt;(index);
-            <span class="kw">while </span><span class="self">self</span>.get_left_index::&lt;V&gt;(current_index) != NIL {
-                current_index = <span class="self">self</span>.get_left_index::&lt;V&gt;(current_index);
-            }
-            <span class="kw">return </span>current_index;
-        }
-
-        <span class="comment">// Successor is above, keep going up while we are the right child
-        </span><span class="kw">let </span><span class="kw-2">mut </span>current_index: DataIndex = index;
-        <span class="kw">while </span><span class="self">self</span>.is_right_child::&lt;V&gt;(current_index) {
-            current_index = <span class="self">self</span>.get_parent_index::&lt;V&gt;(current_index);
-        }
-        current_index = <span class="self">self</span>.get_parent_index::&lt;V&gt;(current_index);
-
         current_index
     }
 }
@@ -4007,7 +3985,6 @@
         }
 
         <span class="kw">let </span>grandparent_color: Color = <span class="self">self</span>.get_color::&lt;V&gt;(grandparent_index);
-        <span class="kw">let </span>parent_color: Color = <span class="self">self</span>.get_color::&lt;V&gt;(parent_index);
         <span class="kw">let </span>parent_is_left: bool = <span class="self">self</span>.is_left_child::&lt;V&gt;(parent_index);
         <span class="kw">let </span>current_is_left: bool = <span class="self">self</span>.is_left_child::&lt;V&gt;(index_to_fix);
 
@@ -4018,28 +3995,28 @@
             <span class="kw">return </span>NIL;
         }
 
+        <span class="kw">let </span>index_to_fix_color: Color = <span class="self">self</span>.get_color::&lt;V&gt;(index_to_fix);
         <span class="comment">// Case II: Uncle is black, left left
         </span><span class="kw">if </span>parent_is_left &amp;&amp; current_is_left {
             <span class="self">self</span>.rotate_right::&lt;V&gt;(grandparent_index);
             <span class="self">self</span>.set_color::&lt;V&gt;(grandparent_index, parent_color);
             <span class="self">self</span>.set_color::&lt;V&gt;(parent_index, grandparent_color);
         }
-        <span class="kw">let </span>index_to_fix_color: Color = <span class="self">self</span>.get_color::&lt;V&gt;(index_to_fix);
         <span class="comment">// Case III: Uncle is black, left right
-        </span><span class="kw">if </span>parent_is_left &amp;&amp; !current_is_left {
+        </span><span class="kw">else if </span>parent_is_left &amp;&amp; !current_is_left {
             <span class="self">self</span>.rotate_left::&lt;V&gt;(parent_index);
             <span class="self">self</span>.rotate_right::&lt;V&gt;(grandparent_index);
             <span class="self">self</span>.set_color::&lt;V&gt;(index_to_fix, grandparent_color);
             <span class="self">self</span>.set_color::&lt;V&gt;(grandparent_index, index_to_fix_color);
         }
         <span class="comment">// Case IV: Uncle is black, right right
-        </span><span class="kw">if </span>!parent_is_left &amp;&amp; !current_is_left {
+        </span><span class="kw">else if </span>!parent_is_left &amp;&amp; !current_is_left {
             <span class="self">self</span>.rotate_left::&lt;V&gt;(grandparent_index);
             <span class="self">self</span>.set_color::&lt;V&gt;(grandparent_index, parent_color);
             <span class="self">self</span>.set_color::&lt;V&gt;(parent_index, grandparent_color);
         }
         <span class="comment">// Case V: Uncle is black, right left
-        </span><span class="kw">if </span>!parent_is_left &amp;&amp; current_is_left {
+        </span><span class="kw">else if </span>!parent_is_left &amp;&amp; current_is_left {
             <span class="self">self</span>.rotate_right::&lt;V&gt;(parent_index);
             <span class="self">self</span>.rotate_left::&lt;V&gt;(grandparent_index);
             <span class="self">self</span>.set_color::&lt;V&gt;(index_to_fix, grandparent_color);
@@ -5353,21 +5330,6 @@
         tree.lookup_index(<span class="kw-2">&amp;</span>TestOrder2::new(<span class="number">1_000</span>, <span class="number">1234</span>));
         tree.lookup_index(<span class="kw-2">&amp;</span>TestOrder2::new(<span class="number">1_000</span>, <span class="number">4567</span>));
         tree.lookup_index(<span class="kw-2">&amp;</span>TestOrder2::new(<span class="number">1_000</span>, <span class="number">7890</span>));
-    }
-
-    <span class="comment">// Get next higher index
-    </span><span class="attr">#[test]
-    </span><span class="kw">fn </span>test_get_next_higher_index() {
-        <span class="kw">let </span><span class="kw-2">mut </span>data: [u8; <span class="number">100000</span>] = [<span class="number">0</span>; <span class="number">100000</span>];
-        <span class="kw">let </span>tree: RedBlackTree&lt;TestOrderBid&gt; = init_simple_tree(<span class="kw-2">&amp;mut </span>data);
-        tree.pretty_print::&lt;TestOrderBid&gt;();
-        <span class="kw">for </span>i <span class="kw">in </span><span class="number">1</span>..<span class="number">11 </span>{
-            <span class="macro">assert_eq!</span>(
-                tree.get_next_higher_index::&lt;TestOrderBid&gt;(TEST_BLOCK_WIDTH * i),
-                TEST_BLOCK_WIDTH * (i + <span class="number">1</span>)
-            );
-        }
-        <span class="macro">assert_eq!</span>(tree.get_next_higher_index::&lt;TestOrderBid&gt;(NIL), NIL);
     }
 }
 </code></pre></div></section></main></body></html>
